@@ -4,15 +4,21 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "60179cdb33f686f365c54db870903949",
+    "content-hash": "0f4c9dc2eab367fea0b82ab3b8c3d433",
     "packages": [
         {
             "name": "jcubic/json-rpc",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../../json-rpc/php",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/jcubic/json-rpc.php.git",
                 "reference": "ff7b327d865b15cbf84b29f46b6b91ef88463da9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/jcubic/json-rpc.php/zipball/ff7b327d865b15cbf84b29f46b6b91ef88463da9",
+                "reference": "ff7b327d865b15cbf84b29f46b6b91ef88463da9",
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.4"
@@ -23,6 +29,7 @@
                     "Jcubic\\JsonRpc\\": "src/"
                 }
             },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -41,18 +48,17 @@
                 "rpc",
                 "server"
             ],
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/jcubic/json-rpc.php/issues",
+                "source": "https://github.com/jcubic/json-rpc.php/tree/1.0.0"
+            },
+            "time": "2026-09-08T12:13:16+00:00"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "jcubic/json-rpc": 20
-    },
+    "stability-flags": {},
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
