@@ -47,34 +47,40 @@ function base64_to_uint8(base64: string): Uint8Array {
 // and a Map (inode -> stat entry) for the superblock
 // -----------------------------------------------------------------------------
 
-type SerializedValue =
-    | { __type: 'uint8array'; data: string }
-    | { __type: 'map'; data: [unknown, unknown][] }
-    | { __type: 'json'; data: unknown };
+// the superblock is a *nested* Map-of-Maps (CacheFS structure),
+// so Maps have to be (de)serialized recursively
+function serialize_value(value: unknown): unknown {
+    if (value instanceof Uint8Array) {
+        return { __type: 'uint8array', data: uint8_to_base64(value) };
+    }
+    if (value instanceof Map) {
+        return {
+            __type: 'map',
+            data: [...value.entries()].map(([key, val]) => [key, serialize_value(val)])
+        };
+    }
+    return value;
+}
+
+function deserialize_value(value: any): unknown {
+    if (value && typeof value === 'object' && value.__type === 'uint8array') {
+        return base64_to_uint8(value.data);
+    }
+    if (value && typeof value === 'object' && value.__type === 'map') {
+        return new Map(value.data.map(([key, val]: [unknown, unknown]) => {
+            return [key, deserialize_value(val)];
+        }));
+    }
+    return value;
+}
 
 function serialize(value: unknown): string {
-    let payload: SerializedValue;
-    if (value instanceof Uint8Array) {
-        payload = { __type: 'uint8array', data: uint8_to_base64(value) };
-    } else if (value instanceof Map) {
-        payload = { __type: 'map', data: [...value.entries()] };
-    } else {
-        payload = { __type: 'json', data: value };
-    }
-    return uint8_to_base64(new TextEncoder().encode(JSON.stringify(payload)));
+    return uint8_to_base64(new TextEncoder().encode(JSON.stringify(serialize_value(value))));
 }
 
 function deserialize(base64: string): unknown {
     const json = new TextDecoder().decode(base64_to_uint8(base64));
-    const payload = JSON.parse(json) as SerializedValue;
-    switch (payload.__type) {
-        case 'uint8array':
-            return base64_to_uint8(payload.data);
-        case 'map':
-            return new Map(payload.data);
-        default:
-            return payload.data;
-    }
+    return deserialize_value(JSON.parse(json));
 }
 
 // -----------------------------------------------------------------------------
