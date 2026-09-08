@@ -11,6 +11,8 @@ const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
 less(window, $);
 
+(globalThis as any).$ = $;
+
 const delay = 80;
 
 type JQueryTerminal = ReturnType<JQuery['terminal']>;
