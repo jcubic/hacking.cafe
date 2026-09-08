@@ -1,0 +1,63 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "60179cdb33f686f365c54db870903949",
+    "packages": [
+        {
+            "name": "jcubic/json-rpc",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../../json-rpc/php",
+                "reference": "ff7b327d865b15cbf84b29f46b6b91ef88463da9"
+            },
+            "require": {
+                "php": ">=7.4"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Jcubic\\JsonRpc\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jakub T. Jankiewicz",
+                    "email": "jcubic@onet.pl",
+                    "homepage": "https://jakub.jankiewicz.org/"
+                }
+            ],
+            "description": "JSON-RPC server implementation for PHP",
+            "homepage": "https://github.com/jcubic/json-rpc",
+            "keywords": [
+                "json",
+                "json-rpc",
+                "rpc",
+                "server"
+            ],
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {
+        "jcubic/json-rpc": 20
+    },
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">=7.4"
+    },
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
+}

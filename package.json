@@ -5,7 +5,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n client,api -c blue,yellow \"npm:dev:client\" \"npm:dev:api\"",
+    "dev:client": "vite",
+    "dev:api": "php -S localhost:8810 -t api api/index.php",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
@@ -13,11 +15,13 @@
   "author": "Jakub T. Jankiewicz <jcubic@onet.pl> (https://jcubic.pl/me/)",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",
     "vite-plugin-static-copy": "^4.1.1"
   },
   "dependencies": {
+    "@jcubic/json-rpc": "file:../json-rpc/npm",
     "jquery.terminal": "^2.47.0"
   },
   "allowScripts": {

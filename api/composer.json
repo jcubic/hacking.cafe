@@ -1,0 +1,18 @@
+{
+    "name": "jcubic/hacking-cafe-api",
+    "description": "Development JSON-RPC server for hacking.cafe",
+    "license": "AGPL-3.0",
+    "require": {
+        "php": ">=7.4",
+        "jcubic/json-rpc": "dev-master"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../json-rpc/php",
+            "options": {
+                "symlink": false
+            }
+        }
+    ]
+}

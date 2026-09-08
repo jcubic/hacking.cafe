@@ -1,3 +1,6 @@
 [submodule "api/jargon"]
 	path = api/jargon
 	url = git@github.com:jcubic/jargon.git
+[submodule "api/json-rpc"]
+	path = api/json-rpc
+	url = git@github.com:jcubic/json-rpc.git
