@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg version="1.1" width="1834" height="1834" viewBox="0 0 1834 1834" id="svg1" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <defs id="defs1" />
+  <metadata id="metadata1">
+    <rdf:RDF>
+      <rdf:Description>
+        <dc:creator>RealFaviconGenerator</dc:creator>
+        <dc:source>https://realfavicongenerator.net</dc:source>
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
+  <rect style="fill:#212529;fill-opacity:1;fill-rule:evenodd;stroke-width:25.2992;stroke-linecap:round;stroke-linejoin:round" id="rect1" width="1834" height="1834" x="0" y="0" />
+  <g id="g6" transform="matrix(36.680004,0,0,36.680004,-1764.1687,-2162.2114)">
+    <path d="m 71.593398,95.696587 v -23.49726 h -4.699452 v 9.398904 H 59.8612 v -9.398904 h -4.699452 v 23.49726 H 59.8612 v -9.398904 h 7.032746 v 9.398904 z" id="text5" style="font-weight:900;font-size:32.8633px;line-height:1;font-family:Lovelo;-inkscape-font-specification:'Lovelo Heavy';letter-spacing:2.28217px;word-spacing:0px;text-anchor:end;white-space:pre;fill:#1e90ff;fill-opacity:1;fill-rule:evenodd;stroke-width:0.91287;stroke-linecap:round;stroke-linejoin:round" aria-label="h" />
+    <path d="m 89.946154,77.769656 0.558676,-4.830905 c -1.413122,-0.624403 -2.99056,-0.920172 -4.633725,-0.920172 -15.905837,0 -15.938701,23.858756 0,23.858756 1.643165,0 3.713553,-0.39436 5.159538,-0.985899 L 90.40624,90.027667 c -0.887309,0.460087 -2.49761,1.051626 -4.535135,1.051626 -9.300314,0 -9.300314,-14.328399 0,-14.328399 2.037525,0 3.18774,0.558676 4.075049,1.018762 z" id="text6" style="font-weight:900;font-size:32.8633px;line-height:1;font-family:Lovelo;-inkscape-font-specification:'Lovelo Heavy';letter-spacing:2.28217px;word-spacing:0px;text-anchor:end;white-space:pre;fill:#ffff00;fill-rule:evenodd;stroke-width:0.91287;stroke-linecap:round;stroke-linejoin:round" aria-label="c" />
+  </g>
+</svg>
