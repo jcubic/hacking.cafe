@@ -21,6 +21,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 class Service {
+    private PDO $fs_db;
+
+    function __construct() {
+        $this->fs_db = new PDO('sqlite:' . __DIR__ . '/fs.db');
+        $this->fs_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->fs_db->exec('CREATE TABLE IF NOT EXISTS fs(name TEXT PRIMARY KEY, data BLOB)');
+    }
     function jargon_list() {
         $db = new PDO('sqlite:jargon.db');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -113,6 +120,30 @@ class Service {
             $page = $this->get($url);
         }
         return $page ? mb_convert_encoding($page, 'UTF-8', 'UTF-8') : null;
+    }
+
+    public function fs_get($name) {
+        $stmt = $this->fs_db->prepare('SELECT data FROM fs WHERE name = ?');
+        $stmt->execute([$name]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        // data is base64 encoded, so it can hold binary files
+        return $row ? base64_encode($row['data']) : null;
+    }
+    public function fs_set($name, $data) {
+        $binary = base64_decode($data, true);
+        if ($binary === false) {
+            throw new \Jcubic\JsonRpc\JsonRpcException(106, 'fs_set: data is not valid base64');
+        }
+        $stmt = $this->fs_db->prepare('INSERT OR REPLACE INTO fs(name, data) VALUES(?, ?)');
+        $stmt->bindValue(1, $name);
+        $stmt->bindValue(2, $binary, PDO::PARAM_LOB);
+        $stmt->execute();
+        return true;
+    }
+    public function fs_delete($name) {
+        $stmt = $this->fs_db->prepare('DELETE FROM fs WHERE name = ?');
+        $stmt->execute([$name]);
+        return $stmt->rowCount() > 0;
     }
     // ------------------------------------------------------------------------
     public function hello($name) {
