@@ -1,0 +1,3 @@
+[submodule "api/jargon"]
+	path = api/jargon
+	url = git@github.com:jcubic/jargon.git
