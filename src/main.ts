@@ -180,6 +180,8 @@ const term = $('body').terminal(intepreter as any, {
                 return greetings_medium.innerHTML;
             } else if (cols >= 38) {
                 return greetings_small.innerHTML;
+            } else if (cols >= 29) {
+                return greetings_smaller.innerHTML;
             } else {
                 return greetings_tiny.innerHTML
             }
