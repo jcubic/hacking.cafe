@@ -107,12 +107,12 @@ class Service {
             $url = "https://www.rfc-editor.org/rfc-index.txt";
             $page = $this->get($url);
             $page = preg_replace("/(^[0-9]+)/m", '[[!bu;#fff;;rfc]$1]', $page);
-            return $page;
         } else {
             $number = preg_replace("/^0+/", "", $number);
             $url = "https://www.rfc-editor.org/rfc/rfc$number.txt";
-            return $this->get($url);
+            $page = $this->get($url);
         }
+        return $page ? mb_convert_encoding($page, 'UTF-8', 'UTF-8') : null;
     }
     // ------------------------------------------------------------------------
     public function hello($name) {
