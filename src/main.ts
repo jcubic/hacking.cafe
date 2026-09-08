@@ -12,7 +12,9 @@ const delay = 80;
 
 type JQueryTerminal = ReturnType<JQuery['terminal']>;
 
-const intepreter = rpc({ url: 'http://localhost:8810' }).then(service => {
+const rpc_url = import.meta.env.DEV ? 'http://localhost:8810' : '/api';
+
+const intepreter = rpc({ url: rpc_url }).then(service => {
     const commands = {
         async hello(name: string) {
             return service.hello(name);

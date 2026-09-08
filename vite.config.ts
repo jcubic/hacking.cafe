@@ -8,6 +8,14 @@ export default defineConfig({
                 {
                     src: 'api/jargon/*',
                     dest: '.'
+                },
+                {
+                    src: 'api/index.php',
+                    dest: '.'
+                },
+                {
+                    src: 'api/vendor/**',
+                    dest: '.'
                 }
             ]
         })
