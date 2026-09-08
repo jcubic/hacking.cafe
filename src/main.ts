@@ -1,24 +1,26 @@
 import jQuery from 'jquery';
 
 import terminal from 'jquery.terminal';
-import type { JQueryTerminal, JQueryStatic } from 'jquery.terminal';
-import unix from 'jquery.terminal/js/unix_formatting.js';
+// @ts-expect-error
 import xml from 'jquery.terminal/js/xml_formatting.js';
 
-const $ = terminal(window, jQuery);
+const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
 
 const delay = 80;
 
+type JQueryTerminal = ReturnType<JQuery['terminal']>;
+
 const commands = {
     async jargon(this: JQueryTerminal, ...args: string[]) {
-        const $ = (globalThis as any).$ as JQueryStatic;
+        // @ts-expect-error
         const options = $.terminal.parse_options(args, { boolean: ['s'] });
         // there are options
         if (options._.length) {
             const query = options._.join(' ').toLowerCase();
             // search option
             if (options.s) {
+                // @ts-expect-error
                 const { data, error } = await jargon_search(query);
                 if (error) {
                     this.error(error);
@@ -29,6 +31,7 @@ const commands = {
                 }
             } else {
                 // normal query
+                // @ts-expect-error
                 const { data, error } = await jargon_term(query);
                 if (error) {
                     this.error(error);
@@ -73,12 +76,14 @@ const commands = {
                     if (Number.isInteger(args[0])) {
                         const number = args[0];
                         const url = `https://www.rfc-editor.org/rfc/rfc${number}.txt`;
+                        // @ts-expect-error
                         const rfc = await fetch_rfc(url);
                         display_rfc(rfc);
                     } else {
                         this.error('invalid RFC number');
                     }
                 } else {
+                    // @ts-expect-error
                     const rfc = await fetch_rfc('http://www.rfc-editor.org/in-notes/rfc-index.txt');
                     display_rfc(rfc);
                 }
@@ -113,24 +118,29 @@ $.terminal.defaults.formatters.unshift([/(rfc\s?([0-9]+))/gi, '<rfc num="$2">$1<
 }]);
 
 //$.terminal.defaults.formatters.push([/ ([0-9+]\. )/g, '\n$1']);
+// @ts-expect-error
 $.terminal.xml_formatter.tags.name = () => '[[!bu;#fff;;jargon]';
+// @ts-expect-error
 $.terminal.xml_formatter.tags.emphasis = () => '[[b;#fff;]';
+// @ts-expect-error
 $.terminal.xml_formatter.tags.command = () => '[[!bu;#fff;;command]';
-$.terminal.xml_formatter.tags.rfc = ({ num }) => `[[!bu;yellow;;rfc;${num}]`;
+// @ts-expect-error
+$.terminal.xml_formatter.tags.rfc = ({ num }: { num: string }) => `[[!bu;yellow;;rfc;${num}]`;
 
 const formatter = new Intl.ListFormat('en', {
     style: 'long',
     type: 'conjunction',
 });
 
-const term = $('body').terminal(commands, {
+const term = $('body').terminal(commands as any, {
     checkArity: false,
+    // @ts-expect-error
     execHash: true,
     exit: false,
     execAnimation: true,
     execHistory: true,
     completion: true,
-    greetings: false,
+    greetings: null,
     prompt: '<DodgerBlue>~</DodgerBlue>:&gt; ',
     onInit() {
         this.echo(() => {
@@ -148,38 +158,44 @@ const term = $('body').terminal(commands, {
     }
 });
 
-term.on('click', 'a.jargon', function() {
-    const href = $(this).attr('href');
+term.on('click', 'a.jargon', function(this: any) {
+    const href = $(this).attr('href') as string;
     term.exec(`jargon ${href}`, { typing: true, delay });
     return false;
-}).on('click', 'a.command', function() {
-    const command = $(this).attr('href');
+}).on('click', 'a.command', function(this: any) {
+    const command = $(this).attr('href') as string;
     term.exec(command, { typing: true, delay });
     return false;
-}).on('click', 'a.rfc', function() {
-    const command = $(this).attr('href');
+}).on('click', 'a.rfc', function(this: any) {
+    const command = $(this).attr('href') as string;
     // are we inside RFC browser?
     if (term.level() >= 2) {
-        commands.rfc.call(term, +command);
+        commands.rfc.call(term, command);
     } else {
         term.exec(`rfc ${command}`, { typing: true, delay });
     }
     return false;
 });
 
-function format_entry(entries) {
-    let result = entries.map(function(entry) {
+type JargonEntry = {
+    term: string;
+    def: string;
+    abbrev?: []
+};
+
+function format_entry(entries: JargonEntry[]) {
+    let result = entries.map(function(entry: JargonEntry) {
         let text = '[[b;#fff;]' + entry.term + ']';
         if (entry.abbrev) {
             text += ' (' + entry.abbrev.join(', ') + ')';
         }
         let re = new RegExp("((?:https?|ftps?)://\\S+)|\\.(?!\\s|\\]\\s)\\)?", "g");
-        let def = entry.def.replace(re, function(text, g) {
+        let def = entry.def.replace(re, function(text: string, g: string) {
             return g ? g : (text == '.)' ? '.) ' : '. ');
         });
         return text + '\n' + def + '\n';
     }).join('\n');
-    result = $.terminal.format_split(result).map(function(str) {
+    result = $.terminal.format_split(result).map(function(str: string) {
         if ($.terminal.is_formatting(str)) {
             return str.replace(/^\[\[([bu]{2};)/, '[[!$1');
         }
@@ -195,19 +211,7 @@ function command_list() {
     return list.map(cmd => `<command>${cmd}</command>`);
 }
 
-function proxy(url) {
-    return 'https://corsproxy.io/?url=' + encodeURIComponent(url);
-}
-
-async function fetch_rfc(url) {
-    const res = await fetch(proxy(url));
-    if (res.status !== 200) {
-        throw new Error('invalid RFC number');
-    }
-    return res.text();
-}
-
-function display_rfc(rfc) {
+function display_rfc(rfc: string) {
     // RFC have leading and trailing whitespace
     rfc = rfc.trim();
     // RFC don't have any XML formatting, they are text files
