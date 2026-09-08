@@ -4,6 +4,7 @@ import terminal from 'jquery.terminal';
 
 // @ts-expect-error
 import xml from 'jquery.terminal/js/xml_formatting.js';
+// @ts-expect-error
 import less from 'jquery.terminal/js/less.js';
 
 const $ = terminal(window, jQuery) as any as JQueryStatic;
@@ -33,19 +34,19 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                         if (!query.match(/%/)) {
                             query = '%' + query + '%';
                         }
-                        const data = await service.jargon_search(query);
+                        const data = await service.jargon_search(query) as Array<{ term: string }>;
                         this.echo(data.map(({ term }: { term: string }) => {
                             return `<name>${term}</name>`;
                         }).join('\n'));
                     } else {
                         // normal query
                         const data = await service.jargon(query);
-                        const entry = format_entry(data);
+                        const entry = format_entry(data as JargonEntry[]);
                         this.echo(entry.trim(), {
                             keepWords: true
                         });
                     }
-                } catch (error) {
+                } catch (error: any) {
                     this.error(error.message);
                 }
             } else {
@@ -87,7 +88,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                         }
                     }
                     const rfc = await service.rfc(arg);
-                    display_rfc(rfc);
+                    display_rfc(rfc as string);
                 } catch (err) {
                     this.error((err as Error).message);
                 }
@@ -187,7 +188,6 @@ const term = $('body').terminal(intepreter as any, {
 });
 
 
-
 type JargonEntry = {
     term: string;
     def: string;
@@ -215,8 +215,6 @@ function format_entry(entries: JargonEntry[]) {
 
     return result;
 }
-
-
 
 function display_rfc(rfc: string) {
     // RFC have leading and trailing whitespace
