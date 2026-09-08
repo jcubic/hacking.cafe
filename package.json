@@ -1,0 +1,25 @@
+{
+  "name": "jargon-terminal",
+  "version": "0.1.0",
+  "private": "true",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "Jakub T. Jankiewicz <jcubic@onet.pl> (https://jcubic.pl/me/)",
+  "license": "AGPL-3.0",
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3"
+  },
+  "dependencies": {
+    "jquery.terminal": "^2.47.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}
