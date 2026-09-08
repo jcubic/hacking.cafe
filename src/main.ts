@@ -4,9 +4,11 @@ import terminal from 'jquery.terminal';
 
 // @ts-expect-error
 import xml from 'jquery.terminal/js/xml_formatting.js';
+import less from 'jquery.terminal/js/less.js';
 
 const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
+less(window, $);
 
 const delay = 80;
 
@@ -24,30 +26,27 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             const options = $.terminal.parse_options(args, { boolean: ['s'] });
             // there are options
             if (options._.length) {
-                const query = options._.join(' ').toLowerCase();
+                let query = options._.join(' ').toLowerCase();
                 // search option
-                if (options.s) {
-                    // @ts-expect-error
-                    const { data, error } = await jargon_search(query);
-                    if (error) {
-                        this.error(error);
-                    } else {
-                        this.echo(data.map((term: string) => {
+                try {
+                    if (options.s) {
+                        if (!query.match(/%/)) {
+                            query = '%' + query + '%';
+                        }
+                        const data = await service.jargon_search(query);
+                        this.echo(data.map(({ term }: { term: string }) => {
                             return `<name>${term}</name>`;
                         }).join('\n'));
-                    }
-                } else {
-                    // normal query
-                    // @ts-expect-error
-                    const { data, error } = await jargon_term(query);
-                    if (error) {
-                        this.error(error);
                     } else {
+                        // normal query
+                        const data = await service.jargon(query);
                         const entry = format_entry(data);
                         this.echo(entry.trim(), {
                             keepWords: true
                         });
                     }
+                } catch (error) {
+                    this.error(error.message);
                 }
             } else {
                 const msg = 'This is the Jargon File, a comprehens'+
@@ -79,21 +78,16 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                     'links to RFC documents are clickable');
             } else {
                 try {
+                    let arg = null;
                     if (args.length) {
                         if (Number.isInteger(args[0])) {
-                            const number = args[0];
-                            const url = `https://www.rfc-editor.org/rfc/rfc${number}.txt`;
-                            // @ts-expect-error
-                            const rfc = await fetch_rfc(url);
-                            display_rfc(rfc);
+                            arg = args[0];
                         } else {
                             this.error('invalid RFC number');
                         }
-                    } else {
-                        // @ts-expect-error
-                        const rfc = await fetch_rfc('http://www.rfc-editor.org/in-notes/rfc-index.txt');
-                        display_rfc(rfc);
                     }
+                    const rfc = await service.rfc(arg);
+                    display_rfc(rfc);
                 } catch (err) {
                     this.error((err as Error).message);
                 }
@@ -131,7 +125,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         const command = $(this).attr('href') as string;
         // are we inside RFC browser?
         if (term.level() >= 2) {
-            commands.rfc.call(term, command);
+            commands.rfc.call(term, parseInt(command, 10) as any);
         } else {
             term.exec(`rfc ${command}`, { typing: true, delay });
         }
