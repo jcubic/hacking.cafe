@@ -15,21 +15,21 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises;
-    let cwd = '';
+    let cwd = '/';
 
     const commands = {
         async hello(name: string) {
             return service.hello(name);
         },
         async cat(...args: string[]) {
-            const content = await fs.readFile(args[0], 'utf8');
+            const content = await fs.readFile(path.resolve(cwd, args[0]), 'utf8');
             term.echo(content);
         },
         mkdir: async function(this: JQueryTerminal, args: string) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             for (const dir of options._) {
-                const fullname = dir[0] === '/' ? dir : path.join(cwd, dir);
-                mkdir(fullname, !!options.p);
+                const fullname = path.resolve(cwd, dir);
+                await mkdir(fullname, !!options.p);
             }
         },
         async ls(...args: string[]) {
@@ -43,8 +43,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                     return list.filter(name => !name.match(/^\./));
                 }
             }
-            const path = cwd + '/' + (options._[0] ?? '');
-            const content = await list_dir(path);
+            const dir_path = path.resolve(cwd, options._[0] ?? '.');
+            const content = await list_dir(dir_path);
             const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => color('blue', dir));
             const result = dirs.concat(filter(content.files));
             if (result.length) {
