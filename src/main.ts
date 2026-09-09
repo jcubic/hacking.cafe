@@ -323,11 +323,13 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             {
                 name: '>',
                 output: true,
-                callback: function(this: JQueryTerminal, file: string, text: string) {
+                callback: function(this: JQueryTerminal, file: string) {
                     const fullname = path.resolve(cwd, file);
-                    if (typeof text !== 'undefined') {
-                        return fs.writeFile(fullname, text);
-                    }
+                    return this.read('').then(text => {
+                        if (typeof text !== 'undefined') {
+                            return fs.writeFile(fullname, text);
+                        }
+                    });
                 }
             }
         ]
