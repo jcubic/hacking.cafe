@@ -22,6 +22,19 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         async hello(name: string) {
             return service.hello(name);
         },
+        echo(this: JQueryTerminal, ...args: []) {
+            this.echo(args.join(' '));
+        },
+        async less(this: JQueryTerminal, fname?: string) {
+            let content;
+            if (fname) {
+                const fullname = path.resolve(cwd, fname);
+                content = await fs.readFile(fullname, 'utf8');
+            } else {
+                content = await this.read('');
+            }
+            this.less(content);
+        },
         async cat(this: JQueryTerminal, ...args: string[]) {
             let content;
             if (args.length === 0) {
