@@ -219,42 +219,60 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         }
     }
 
+    function get_path(string: string) {
+        var path = cwd.replace(/^\//, '').split('/');
+        if (path[0] === '') {
+            path = path.slice(1);
+        }
+        var parts = string === '/'
+            ? string.split('/')
+            : string.replace(/\/?[^\/]*$/, '').split('/');
+        if (parts[0] === '') {
+            parts = parts.slice(1);
+        }
+        if (string === '/') {
+            return [];
+        } else if (string.startsWith('/')) {
+            return parts;
+        } else if (path.length) {
+            return path.concat(parts);
+        } else {
+            return parts;
+        }
+    }
+
     const command_list = Object.keys(commands);
 
     completion = async function(this: JQueryTerminal, string: string) {
-        try {
-            var cmd = $.terminal.parse_command(this.before_cursor());
-            async function processAssets(callback: (arg: ListDir) => string[]) {
-                var dir = path.resolve(cwd, string || '.');
-                return callback(await list_dir(dir));
-            }
-            function prepend(list: string[]) {
-                if (string.match(/\//) || (!string && cwd === '/')) {
-                    var path = string.replace(/\/[^\/]+$/, '').replace(/\/+$/, '');
-                    return list.map((dir: string) => path + '/' + dir);
-                } else {
-                    return list;
-                }
-            }
-            function trailing(list: string[]) {
-                return list.map((dir: string) => dir + '/');
-            }
-            if (cmd.name !== string) {
-                switch (cmd.name) {
-                    case 'cat':
-                    case 'less':
-                        return await processAssets((content: ListDir) => {
-                            return prepend(trailing(content.dirs).concat(content.files));
-                        });
-                    case 'ls':
-                    case 'cd':
-                        return await processAssets((content: ListDir) => prepend(trailing(content.dirs)));
-                }
-            }
-            return command_list;
-        } catch (e: any) {
-            console.error(e);
+        var cmd = $.terminal.parse_command(this.before_cursor());
+        async function processAssets(callback: (arg: ListDir) => string[]) {
+            var dir = get_path(string);
+            return callback(await list_dir('/' + dir.join('/')));
         }
+        function prepend(list: string[]) {
+            if (string.match(/\//) || (!string && cwd === '/')) {
+                var path = string.replace(/\/[^\/]+$/, '').replace(/\/+$/, '');
+                return list.map((dir: string) => path + '/' + dir);
+            } else {
+                return list;
+            }
+        }
+        function trailing(list: string[]) {
+            return list.map((dir: string) => dir + '/');
+        }
+        if (cmd.name !== string) {
+            switch (cmd.name) {
+                case 'cat':
+                case 'less':
+                    return await processAssets((content: ListDir) => {
+                        return prepend(trailing(content.dirs).concat(content.files));
+                    });
+                case 'ls':
+                case 'cd':
+                    return await processAssets((content: ListDir) => prepend(trailing(content.dirs)));
+            }
+        }
+        return command_list;
     };
 
     term.option('completion', completion);
@@ -265,11 +283,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         redirects: [
             {
                 name: '>',
-                callback: function(file: string) {
+                callback: function(this: JQueryTerminal, file: string) {
                     const fullname = path.resolve(cwd, file);
-                    console.log({ fullname });
-                    return term.read('').then(text => {
-                        console.log({ fullname, text });
+                    return this.read('').then(text => {
                         if (typeof text !== 'undefined') {
                             return fs.writeFile(fullname, text);
                         }
