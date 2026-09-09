@@ -1,25 +1,13 @@
-import jQuery from 'jquery';
 import rpc from '@jcubic/json-rpc';
-import terminal from 'jquery.terminal';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import path from 'path-browserify';
 
-// @ts-expect-error
-import xml from 'jquery.terminal/js/xml_formatting.js';
-// @ts-expect-error
-import less from 'jquery.terminal/js/less.js';
-
+import { $, JQueryTerminal } from './terminal';
+import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
-
-const $ = terminal(window, jQuery) as any as JQueryStatic;
-xml(window, $);
-less(window, $);
-
-(globalThis as any).$ = $;
+import { color } from './colors';
 
 const delay = 80;
-
-type JQueryTerminal = ReturnType<JQuery['terminal']>;
 
 const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
 
@@ -63,43 +51,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 term.echo(result);
             }
         },
-        async jargon(this: JQueryTerminal, ...args: string[]) {
-            // @ts-expect-error
-            const options = $.terminal.parse_options(args, { boolean: ['s'] });
-            // there are options
-            if (options._.length) {
-                let query = options._.join(' ').toLowerCase();
-                // search option
-                try {
-                    if (options.s) {
-                        if (!query.match(/%/)) {
-                            query = '%' + query + '%';
-                        }
-                        const data = await service.jargon_search(query) as Array<{ term: string }>;
-                        this.echo(data.map(({ term }: { term: string }) => {
-                            return `<name>${term}</name>`;
-                        }).join('\n'));
-                    } else {
-                        // normal query
-                        const data = await service.jargon(query);
-                        const entry = format_entry(data as JargonEntry[]);
-                        this.echo(entry.trim(), {
-                            keepWords: true
-                        });
-                    }
-                } catch (error: any) {
-                    this.error(error.message);
-                }
-            } else {
-                const msg = 'This is the Jargon File, a comprehens'+
-                    'ive compendium of hacker slang illuminating m'+
-                    'any aspects of hackish tradition, folklore, a'+
-                    'nd humor.\n\nusage: jargon [-s] &lt;QUERY&gt;'+
-                    '\n\n-s search jargon file';
-                const logo = `<bold><white>${jargon.innerHTML}</white></bold>`;
-                this.echo(`${logo}\n${msg}`, { keepWords: true });
-            }
-        },
+        jargon: make_jargon(service),
         record(this: JQueryTerminal, ...args: string[]) {
             // toggle storing commands in URL hash
             if (args[0] === 'start') {
@@ -239,20 +191,6 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     return commands;
 });
 
-$.terminal.defaults.formatters.unshift([/(rfc\s?([0-9]+))/gi, '<rfc num="$2">$1</rfc>', {
-    echo: true
-}]);
-
-//$.terminal.defaults.formatters.push([/ ([0-9+]\. )/g, '\n$1']);
-// @ts-expect-error
-$.terminal.xml_formatter.tags.name = () => '[[!bu;#fff;;jargon]';
-// @ts-expect-error
-$.terminal.xml_formatter.tags.emphasis = () => '[[b;#fff;]';
-// @ts-expect-error
-$.terminal.xml_formatter.tags.command = () => '[[!bu;#fff;;command]';
-// @ts-expect-error
-$.terminal.xml_formatter.tags.rfc = ({ num }: { num: string }) => `[[!bu;yellow;;rfc;${num}]`;
-
 const formatter = new Intl.ListFormat('en', {
     style: 'long',
     type: 'conjunction',
@@ -287,35 +225,6 @@ const term = $('body').terminal(intepreter as any, {
     }
 });
 
-
-type JargonEntry = {
-    term: string;
-    def: string;
-    abbrev?: []
-};
-
-function format_entry(entries: JargonEntry[]) {
-    let result = entries.map(function(entry: JargonEntry) {
-        let text = '[[b;#fff;]' + entry.term + ']';
-        if (entry.abbrev) {
-            text += ' (' + entry.abbrev.join(', ') + ')';
-        }
-        let re = new RegExp("((?:https?|ftps?)://\\S+)|\\.(?!\\s|\\]\\s)\\)?", "g");
-        let def = entry.def.replace(re, function(text: string, g: string) {
-            return g ? g : (text == '.)' ? '.) ' : '. ');
-        });
-        return text + '\n' + def + '\n';
-    }).join('\n');
-    result = $.terminal.format_split(result).map(function(str: string) {
-        if ($.terminal.is_formatting(str)) {
-            return str.replace(/^\[\[([bu]{2};)/, '[[!$1');
-        }
-        return str;
-    }).join('');
-
-    return result;
-}
-
 function display_rfc(rfc: string) {
     // RFC have leading and trailing whitespace
     rfc = rfc.trim();
@@ -323,29 +232,4 @@ function display_rfc(rfc: string) {
     rfc = rfc.replace(/</g, '&lt;');
     rfc = rfc.replace(/>/g, '&gt;');
     term.less(rfc);
-}
-
-const COLORS = {
-    blue:   '#55f',
-    green:  '#4d4',
-    grey:   '#999',
-    red:    '#A00',
-    yellow: '#FF5',
-    violet: '#a320ce',
-    white:  '#fff',
-    'persian-green': '#0aa'
-} as const;
-
-type COLOR = keyof typeof COLORS;
-
-function is_color(color: any): color is COLOR {
-    return Object.hasOwn(COLORS, color);
-}
-
-function color(name: string, string: string) {
-    if (is_color(name)) {
-        return '[[;' + COLORS[name] + ';]' + string + ']';
-    } else {
-        return string;
-    }
 }
