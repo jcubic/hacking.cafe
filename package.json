@@ -15,6 +15,7 @@
   "author": "Jakub T. Jankiewicz <jcubic@onet.pl> (https://jcubic.pl/me/)",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "@types/path-browserify": "^1.0.3",
     "concurrently": "^10.0.5",
     "typescript": "^5.8.3",
     "vite": "^6.3.3",
@@ -23,7 +24,8 @@
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.7.0",
     "@jcubic/json-rpc": "^1.0.0",
-    "jquery.terminal": "^2.47.0"
+    "jquery.terminal": "^2.47.0",
+    "path-browserify": "^1.0.1"
   },
   "allowScripts": {
     "esbuild@0.25.12": true

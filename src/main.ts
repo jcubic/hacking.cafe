@@ -1,11 +1,15 @@
 import jQuery from 'jquery';
 import rpc from '@jcubic/json-rpc';
 import terminal from 'jquery.terminal';
+import LightningFS from '@isomorphic-git/lightning-fs';
+import path from 'path-browserify';
 
 // @ts-expect-error
 import xml from 'jquery.terminal/js/xml_formatting.js';
 // @ts-expect-error
 import less from 'jquery.terminal/js/less.js';
+
+import { RPCBackend } from './fs';
 
 const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
@@ -20,9 +24,44 @@ type JQueryTerminal = ReturnType<JQuery['terminal']>;
 const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
 
 const intepreter = rpc({ url: rpc_url }).then(service => {
+
+    const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
+    const fs = _fs.promises;
+    let cwd = '';
+
     const commands = {
         async hello(name: string) {
             return service.hello(name);
+        },
+        async cat(...args: string[]) {
+            const content = await fs.readFile(args[0], 'utf8');
+            term.echo(content);
+        },
+        mkdir: async function(this: JQueryTerminal, args: string) {
+            const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
+            for (const dir of options._) {
+                const fullname = dir[0] === '/' ? dir : path.join(cwd, dir);
+                mkdir(fullname, !!options.p);
+            }
+        },
+        async ls(...args: string[]) {
+            const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
+            function filter(list: string[]) {
+                if (options.a) {
+                    return list;
+                } else if (options.A) {
+                    return list.filter(name => !name.match(/^\.{1,2}$/));
+                } else {
+                    return list.filter(name => !name.match(/^\./));
+                }
+            }
+            const path = cwd + '/' + (options._[0] ?? '');
+            const content = await list_dir(path);
+            const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => color('blue', dir));
+            const result = dirs.concat(filter(content.files));
+            if (result.length) {
+                term.echo(result);
+            }
         },
         async jargon(this: JQueryTerminal, ...args: string[]) {
             // @ts-expect-error
@@ -141,6 +180,62 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         return list.map(cmd => `<command>${cmd}</command>`);
     }
 
+    async function list_dir(dir: string) {
+        const dirList = await fs.readdir(dir);
+        const files: string[] = [];
+        const dirs: string[] = [];
+        for (const name of dirList) {
+            const file = path.join(dir, name);
+            try {
+                const stat = await fs.stat(file);
+                if (stat.isFile()) {
+                    files.push(name);
+                } else {
+                    dirs.push(name);
+                }
+            } catch(e) {
+                throw new Error(`Internal: scaned file ${file} doesn't exist`);
+            }
+        }
+        return { files, dirs };
+    }
+
+    async function stat_or_null(path: string) {
+        try {
+            return await fs.stat(path);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function mkdir(dir: string, parent = false) {
+        if (parent) {
+            const parts = dir.split('/').filter(part => part !== '');
+            if (!parts.length) {
+                throw new Error('Invalid argument');
+            }
+            let full_path = '/';
+            for (const part of parts) {
+                full_path = path.join(full_path, part);
+                const stat = await stat_or_null(full_path);
+                if (!stat) {
+                    await fs.mkdir(full_path);
+                } else if (stat.isFile()) {
+                    throw new Error(`${full_path} is a file`);
+                }
+            }
+        } else {
+            const stat = await stat_or_null(dir);
+            if (!stat) {
+                await fs.mkdir(dir);
+            } else if (stat.isDirectory()) {
+                throw new Error('Directory already exists');
+            } else if (stat.isFile()) {
+                throw new Error(`${dir} is a File`);
+            }
+        }
+    }
+
     return commands;
 });
 
@@ -169,6 +264,7 @@ const term = $('body').terminal(intepreter as any, {
     execHash: true,
     exit: false,
     execAnimation: true,
+    processArguments: false,
     execHistory: true,
     completion: true,
     greetings: null,
@@ -227,4 +323,29 @@ function display_rfc(rfc: string) {
     rfc = rfc.replace(/</g, '&lt;');
     rfc = rfc.replace(/>/g, '&gt;');
     term.less(rfc);
+}
+
+const COLORS = {
+    blue:   '#55f',
+    green:  '#4d4',
+    grey:   '#999',
+    red:    '#A00',
+    yellow: '#FF5',
+    violet: '#a320ce',
+    white:  '#fff',
+    'persian-green': '#0aa'
+} as const;
+
+type COLOR = keyof typeof COLORS;
+
+function is_color(color: any): color is COLOR {
+    return Object.hasOwn(COLORS, color);
+}
+
+function color(name: string, string: string) {
+    if (is_color(name)) {
+        return '[[;' + COLORS[name] + ';]' + string + ']';
+    } else {
+        return string;
+    }
 }
