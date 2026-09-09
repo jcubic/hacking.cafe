@@ -32,6 +32,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 await mkdir(fullname, !!options.p);
             }
         },
+        pwd() {
+            return cwd;
+        },
         async ls(...args: string[]) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             function filter(list: string[]) {
