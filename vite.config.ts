@@ -14,10 +14,6 @@ export default defineConfig({
                     dest: '.'
                 },
                 {
-                    src: 'favicon',
-                    dest: '.'
-                },
-                {
                     src: 'api/vendor/**',
                     dest: '.'
                 }
