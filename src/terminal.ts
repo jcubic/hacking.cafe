@@ -6,9 +6,13 @@ import xml from 'jquery.terminal/js/xml_formatting.js';
 // @ts-expect-error
 import less from 'jquery.terminal/js/less.js';
 
+// @ts-expect-error
+import pipe from 'jquery.terminal/js/pipe.js';
+
 export const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
 less(window, $);
+pipe(window, $);
 
 export type JQueryTerminal = ReturnType<JQuery['terminal']>;
 

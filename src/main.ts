@@ -11,18 +11,29 @@ const delay = 80;
 
 const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
 
-const intepreter = rpc({ url: rpc_url }).then(service => {
+let cwd = '/';
+let completion;
 
+const intepreter = rpc({ url: rpc_url }).then(service => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises;
-    let cwd = '/';
 
     const commands = {
         async hello(name: string) {
             return service.hello(name);
         },
-        async cat(...args: string[]) {
-            const content = await fs.readFile(path.resolve(cwd, args[0]), 'utf8');
+        async cat(this: JQueryTerminal, ...args: string[]) {
+            let content;
+            if (args.length === 0) {
+                content = this.read('');
+            } else {
+                const files = [];
+                for (const name of args) {
+                    const filename = path.resolve(cwd, name);
+                    files.push(await fs.readFile(filename, 'utf8'));
+                }
+                content = files.join('');
+            }
             term.echo(content);
         },
         mkdir: async function(this: JQueryTerminal, args: string) {
@@ -103,6 +114,11 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             this.echo(text, { keepWords: true });
         },
         help(this: JQueryTerminal) {
+            function command_list() {
+                const list = Object.keys(commands);
+                list.push('clear');
+                return list.map(cmd => `<command>${cmd}</command>`);
+            }
             const list = formatter.format(command_list());
             this.echo(`Available commands: ${list}.`, { keepWords: true });
             this.echo('An <command>rfc</command> command use simplifed unix less command.\n', {
@@ -129,13 +145,12 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         return false;
     });
 
-    function command_list() {
-        const list = Object.keys(commands);
-        list.push('clear');
-        return list.map(cmd => `<command>${cmd}</command>`);
-    }
+    type ListDir = {
+        files: string[],
+        dirs: string[]
+    };
 
-    async function list_dir(dir: string) {
+    async function list_dir(dir: string): Promise<ListDir> {
         const dirList = await fs.readdir(dir);
         const files: string[] = [];
         const dirs: string[] = [];
@@ -191,7 +206,65 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         }
     }
 
-    return commands;
+    const command_list = Object.keys(commands);
+
+    completion = async function(this: JQueryTerminal, string: string) {
+        try {
+            var cmd = $.terminal.parse_command(this.before_cursor());
+            async function processAssets(callback: (arg: ListDir) => string[]) {
+                var dir = path.resolve(cwd, string || '.');
+                return callback(await list_dir(dir));
+            }
+            function prepend(list: string[]) {
+                if (string.match(/\//) || (!string && cwd === '/')) {
+                    var path = string.replace(/\/[^\/]+$/, '').replace(/\/+$/, '');
+                    return list.map((dir: string) => path + '/' + dir);
+                } else {
+                    return list;
+                }
+            }
+            function trailing(list: string[]) {
+                return list.map((dir: string) => dir + '/');
+            }
+            if (cmd.name !== string) {
+                switch (cmd.name) {
+                    case 'cat':
+                    case 'less':
+                        return await processAssets((content: ListDir) => {
+                            return prepend(trailing(content.dirs).concat(content.files));
+                        });
+                    case 'ls':
+                    case 'cd':
+                        return await processAssets((content: ListDir) => prepend(trailing(content.dirs)));
+                }
+            }
+            return command_list;
+        } catch (e: any) {
+            console.error(e);
+        }
+    };
+
+    term.option('completion', completion);
+
+    // @ts-expect-error
+    return $.terminal.pipe(commands, {
+        processArguments: false,
+        redirects: [
+            {
+                name: '>',
+                callback: function(file: string) {
+                    const fullname = path.resolve(cwd, file);
+                    console.log({ fullname });
+                    return term.read('').then(text => {
+                        console.log({ fullname, text });
+                        if (typeof text !== 'undefined') {
+                            return fs.writeFile(fullname, text);
+                        }
+                    });
+                }
+            }
+        ]
+    });
 });
 
 const formatter = new Intl.ListFormat('en', {
@@ -207,7 +280,6 @@ const term = $('body').terminal(intepreter as any, {
     execAnimation: true,
     processArguments: false,
     execHistory: true,
-    completion: true,
     greetings: null,
     prompt: '<DodgerBlue>~</DodgerBlue>:&gt; ',
     onInit() {
