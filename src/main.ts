@@ -302,13 +302,12 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         redirects: [
             {
                 name: '>',
-                callback: function(this: JQueryTerminal, file: string) {
+                output: true,
+                callback: function(this: JQueryTerminal, file: string, text: string) {
                     const fullname = path.resolve(cwd, file);
-                    return this.read('').then(text => {
-                        if (typeof text !== 'undefined') {
-                            return fs.writeFile(fullname, text);
-                        }
-                    });
+                    if (typeof text !== 'undefined') {
+                        return fs.writeFile(fullname, text);
+                    }
                 }
             }
         ]
