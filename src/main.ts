@@ -22,9 +22,11 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         async hello(name: string) {
             return service.hello(name);
         },
+        // ---------------------------------------------------------------------
         echo(this: JQueryTerminal, ...args: []) {
             this.echo(args.join(' '));
         },
+        // ---------------------------------------------------------------------
         async less(this: JQueryTerminal, fname?: string) {
             let content;
             if (fname) {
@@ -35,6 +37,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             }
             this.less(content);
         },
+        // ---------------------------------------------------------------------
         async cat(this: JQueryTerminal, ...args: string[]) {
             let content;
             if (args.length === 0) {
@@ -49,6 +52,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             }
             term.echo(content);
         },
+        // ---------------------------------------------------------------------
         mkdir: async function(this: JQueryTerminal, args: string) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             for (const dir of options._) {
@@ -56,9 +60,11 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 await mkdir(fullname, !!options.p);
             }
         },
+        // ---------------------------------------------------------------------
         pwd() {
             return cwd;
         },
+        // ---------------------------------------------------------------------
         async ls(...args: string[]) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             function filter(list: string[]) {
@@ -78,7 +84,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 term.echo(result);
             }
         },
+        // ---------------------------------------------------------------------
         jargon: make_jargon(service),
+        // ---------------------------------------------------------------------
         record(this: JQueryTerminal, ...args: string[]) {
             // toggle storing commands in URL hash
             if (args[0] === 'start') {
@@ -90,6 +98,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                     'usage: record [stop|start]');
             }
         },
+        // ---------------------------------------------------------------------
         async rfc(this: JQueryTerminal, ...args: string[]) {
 
             if (args[0] == '--help') {
@@ -114,6 +123,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 }
             }
         },
+        // ---------------------------------------------------------------------
         credits(this: JQueryTerminal) {
             const text = [
                 '',
@@ -126,6 +136,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             ].join('\n');
             this.echo(text, { keepWords: true });
         },
+        // ---------------------------------------------------------------------
         help(this: JQueryTerminal) {
             function command_list() {
                 const list = Object.keys(commands);
@@ -139,6 +150,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             });
         }
     };
+
+    // -------------------------------------------------------------------------
     term.on('click', 'a.jargon', function(this: any) {
         const href = $(this).attr('href') as string;
         term.exec(`jargon ${href}`, { typing: true, delay });
@@ -163,6 +176,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         dirs: string[]
     };
 
+    // -------------------------------------------------------------------------
     async function list_dir(dir: string): Promise<ListDir> {
         const dirList = await fs.readdir(dir);
         const files: string[] = [];
@@ -183,6 +197,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         return { files, dirs };
     }
 
+    // -------------------------------------------------------------------------
     async function stat_or_null(path: string) {
         try {
             return await fs.stat(path);
@@ -191,6 +206,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         }
     }
 
+    // -------------------------------------------------------------------------
     async function mkdir(dir: string, parent = false) {
         if (parent) {
             const parts = dir.split('/').filter(part => part !== '');
@@ -219,6 +235,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         }
     }
 
+    // -------------------------------------------------------------------------
     function get_path(string: string) {
         var path = cwd.replace(/^\//, '').split('/');
         if (path[0] === '') {
@@ -243,6 +260,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     const command_list = Object.keys(commands);
 
+    // -------------------------------------------------------------------------
     completion = async function(this: JQueryTerminal, string: string) {
         var cmd = $.terminal.parse_command(this.before_cursor());
         async function processAssets(callback: (arg: ListDir) => string[]) {
@@ -277,6 +295,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     term.option('completion', completion);
 
+    // -------------------------------------------------------------------------
     // @ts-expect-error
     return $.terminal.pipe(commands, {
         processArguments: false,
