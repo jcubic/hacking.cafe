@@ -12,6 +12,8 @@ const delay = 80;
 const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
 
 let cwd = '/';
+// TODO default should be ~
+const default_dir = '/';
 let completion;
 
 const intepreter = rpc({ url: rpc_url }).then(service => {
@@ -25,6 +27,24 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         // ---------------------------------------------------------------------
         echo(this: JQueryTerminal, ...args: []) {
             this.echo(args.join(' '));
+        },
+        // ---------------------------------------------------------------------
+        async cd(dir?: string) {
+            if (dir) {
+                const dirname = path.resolve(cwd, dir);
+                try {
+                    const stat = await fs.stat(dirname);
+                    if (stat.isFile()) {
+                        term.error(`"${dirname}" is not directory`);
+                    } else {
+                        cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
+                    }
+                } catch (e: any) {
+                    term.error("Directory don't exits");
+                }
+            } else {
+                cwd = default_dir;
+            }
         },
         // ---------------------------------------------------------------------
         async less(this: JQueryTerminal, fname?: string) {
@@ -321,14 +341,16 @@ const formatter = new Intl.ListFormat('en', {
 
 const term = $('body').terminal(intepreter as any, {
     checkArity: false,
-    // @ts-expect-error
     execHash: true,
     exit: false,
     execAnimation: true,
     processArguments: false,
     execHistory: true,
     greetings: null,
-    prompt: '<DodgerBlue>~</DodgerBlue>:&gt; ',
+    prompt() {
+        const path = cwd === '/' ? '~' : cwd.replace(default_dir, '~/');
+        return `<DodgerBlue>${path}</DodgerBlue>:&gt; `;
+    },
     onInit() {
         this.echo(() => {
             const cols = this.cols();
