@@ -21,8 +21,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     const fs = _fs.promises;
 
     const commands = {
-        async hello(name: string) {
-            return service.hello(name);
+        async hello(this: JQueryTerminal, name: string) {
+            await service.hello(name);
         },
         // ---------------------------------------------------------------------
         echo(this: JQueryTerminal, ...args: []) {
@@ -316,7 +316,6 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     term.option('completion', completion);
 
     // -------------------------------------------------------------------------
-    // @ts-expect-error
     return $.terminal.pipe(commands, {
         processArguments: false,
         redirects: [
@@ -341,7 +340,7 @@ const formatter = new Intl.ListFormat('en', {
     type: 'conjunction',
 });
 
-const term = $('body').terminal(intepreter as any, {
+const term = $('body').terminal(intepreter, {
     checkArity: false,
     execHash: true,
     exit: false,

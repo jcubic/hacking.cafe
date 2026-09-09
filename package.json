@@ -15,6 +15,7 @@
   "author": "Jakub T. Jankiewicz <jcubic@onet.pl> (https://jcubic.pl/me/)",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "@types/jquery": "^4.0.1",
     "@types/path-browserify": "^1.0.3",
     "concurrently": "^10.0.5",
     "typescript": "^5.8.3",
