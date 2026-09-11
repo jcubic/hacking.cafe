@@ -6,86 +6,136 @@ import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
 import { color } from './colors';
+import { Bash, Stdout, Stdin, PromisifiedFS, BashContext } from './bash';
 
 const delay = 80;
 
 const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
 
-let cwd = '/';
-// TODO default should be ~
-const default_dir = '/';
 let completion;
+
+class BufferOutput implements Stdout {
+    protected _buffer: string[];
+    protected _term: JQueryTerminal;
+    constructor(term: JQueryTerminal) {
+        this._buffer = [];
+        this._term = term;
+    }
+    output() {
+        return this._buffer.join('');
+    }
+    flush() {
+        if (this._buffer.length) {
+            this._term.echo(this.output(), {
+                newline: false
+            });
+            this.clear();
+        }
+    }
+    clear() {
+        this._buffer = [];
+    }
+    write(str: string) {
+        this._buffer.push(str);
+    }
+    writeln(str: string) {
+        this.write(str + '\n');
+    }
+}
+
+class BufferError extends BufferOutput {
+    flush() {
+        if (this._buffer.length) {
+            this._term.error(this.output());
+            this.clear();
+        }
+    }
+}
+
+class Input implements Stdin {
+    private _term: JQueryTerminal;
+    constructor(term: JQueryTerminal) {
+        this._term = term;
+    }
+    read() {
+        return this._term.read('');
+    }
+}
+
 
 const intepreter = rpc({ url: rpc_url }).then(service => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
-    const fs = _fs.promises;
+    const fs = _fs.promises as unknown as PromisifiedFS;
+
+    // TODO default should be ~
+    const default_dir = '/';
 
     const commands = {
-        async hello(this: JQueryTerminal, name: string) {
+        async hello(name: string) {
             await service.hello(name);
         },
         // ---------------------------------------------------------------------
-        echo(this: JQueryTerminal, ...args: []) {
-            this.echo(args.join(' '));
+        echo(this: BashContext, ...args: []) {
+            this.stdout.writeln(args.join(' '));
         },
         // ---------------------------------------------------------------------
-        async cd(dir?: string) {
+        async cd(this: BashContext, dir?: string) {
             if (dir) {
-                const dirname = path.resolve(cwd, dir);
+                const dirname = path.resolve(this.cwd, dir);
                 try {
                     const stat = await fs.stat(dirname);
                     if (stat.isFile()) {
                         term.error(`"${dirname}" is not directory`);
                     } else {
-                        cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
+                        this.cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
                     }
                 } catch (e: any) {
                     term.error("Directory don't exits");
                 }
             } else {
-                cwd = default_dir;
+                this.cwd = default_dir;
             }
         },
         // ---------------------------------------------------------------------
-        async less(this: JQueryTerminal, fname?: string) {
+        async less(this: BashContext, fname?: string) {
             let content;
             if (fname) {
-                const fullname = path.resolve(cwd, fname);
+                const fullname = path.resolve(this.cwd, fname);
                 content = await fs.readFile(fullname, 'utf8');
             } else {
-                content = await this.read('');
+                content = await this.stdin.read();
             }
-            this.less(content);
+            term.less(content);
         },
         // ---------------------------------------------------------------------
-        async cat(this: JQueryTerminal, ...args: string[]) {
+        async cat(this: BashContext, ...args: string[]) {
             let content;
             if (args.length === 0) {
-                content = this.read('');
+                content = await this.stdin.read();
             } else {
                 const files = [];
                 for (const name of args) {
-                    const filename = path.resolve(cwd, name);
+                    const filename = path.resolve(this.cwd, name);
                     files.push(await fs.readFile(filename, 'utf8'));
                 }
                 content = files.join('');
             }
-            term.echo(content);
+            this.stdout.writeln(content);
         },
         // ---------------------------------------------------------------------
-        mkdir: async function(this: JQueryTerminal, args: string) {
+        mkdir: async function(this: BashContext, args: string) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             for (const dir of options._) {
-                const fullname = path.resolve(cwd, dir);
+                const fullname = path.resolve(this.cwd, dir);
                 await mkdir(fullname, !!options.p);
             }
         },
         // ---------------------------------------------------------------------
-        pwd() {
-            return cwd;
+        pwd(this: BashContext) {
+            this.stdout.writeln(this.cwd);
         },
         // ---------------------------------------------------------------------
-        async ls(...args: string[]) {
+        async ls(this: BashContext, ...args: string[]) {
             const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
             function filter(list: string[]) {
                 if (options.a) {
@@ -96,12 +146,14 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                     return list.filter(name => !name.match(/^\./));
                 }
             }
-            const dir_path = path.resolve(cwd, options._[0] ?? '.');
+            const dir_path = path.resolve(this.cwd, options._[0] ?? '.');
             const content = await list_dir(dir_path);
-            const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => color('blue', dir));
+            const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => {
+                return color('blue', dir);
+            });
             const result = dirs.concat(filter(content.files));
             if (result.length) {
-                term.echo(result);
+                this.stdout.write(result.join('\n') + '\n');
             }
         },
         // ---------------------------------------------------------------------
@@ -144,30 +196,30 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             }
         },
         // ---------------------------------------------------------------------
-        credits(this: JQueryTerminal) {
+        credits(this: BashContext) {
             const text = [
                 '',
                 'Tools, libraries, and services used:',
                 '* [[!b;#fff;;;https://terminal.jcubic.pl/]jQuery Terminal]',
-                '* [[!b;#fff;;;https://github.com/patorjk/figlet.js]Figlet.js] + Modular and Rectangles fonts',
+                '* [[!b;#fff;;;https://github.com/patorjk/figlet.js]Figlet.js] + Modular ' +
+                    'and Rectangles fonts',
                 '* [[!b;#fff;;;http://catb.org/jargon/html/index.html]Jargon File] 4.4.7',
                 '* [[!b;#fff;;;https://www.rfc-editor.org/]RFC Editor]',
                 ''
             ].join('\n');
-            this.echo(text, { keepWords: true });
+            this.stdout.writeln(text);
         },
         // ---------------------------------------------------------------------
-        help(this: JQueryTerminal) {
+        help(this: BashContext) {
             function command_list() {
                 const list = Object.keys(commands);
                 list.push('clear');
                 return list.map(cmd => `<command>${cmd}</command>`);
             }
             const list = formatter.format(command_list());
-            this.echo(`Available commands: ${list}.`, { keepWords: true });
-            this.echo('An <command>rfc</command> command use simplifed unix less command.\n', {
-                keepWords: true
-            });
+            this.stdout.writeln(`Available commands: ${list}.`);
+            this.stdout.writeln('An <command>rfc</command> command use simplifed unix ' +
+                                'less command.\n');
         }
     };
 
@@ -257,7 +309,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     // -------------------------------------------------------------------------
     function get_path(string: string) {
-        var path = cwd.replace(/^\//, '').split('/');
+        let path = bash.cwd().replace(/^\//, '').split('/');
         if (path[0] === '') {
             path = path.slice(1);
         }
@@ -282,6 +334,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     // -------------------------------------------------------------------------
     completion = async function(this: JQueryTerminal, string: string) {
+        const cwd = bash.cwd();
         var cmd = $.terminal.parse_command(this.before_cursor());
         async function processAssets(callback: (arg: ListDir) => string[]) {
             var dir = get_path(string);
@@ -301,13 +354,16 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         if (cmd.name !== string) {
             switch (cmd.name) {
                 case 'cat':
+                case 'rm':
                 case 'less':
                     return await processAssets((content: ListDir) => {
                         return prepend(trailing(content.dirs).concat(content.files));
                     });
                 case 'ls':
                 case 'cd':
-                    return await processAssets((content: ListDir) => prepend(trailing(content.dirs)));
+                    return await processAssets((content: ListDir) => {
+                        return prepend(trailing(content.dirs));
+                    });
             }
         }
         return command_list;
@@ -315,25 +371,25 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     term.option('completion', completion);
 
+    const bash = new Bash(commands, {
+        stdout: new BufferOutput(term),
+        stderr: new BufferError(term),
+        stdin: new Input(term),
+        fs,
+        cwd: default_dir
+    });
+
+    term.set_prompt(() => {
+        const cwd = bash.cwd();
+        const path = cwd === '/' ? '~' : cwd.replace(default_dir, '~/');
+        return `<DodgerBlue>${path}</DodgerBlue>:&gt; `;
+    });
+
     // -------------------------------------------------------------------------
     return [
-        $.terminal.pipe(commands, {
-            processArguments: false,
-            redirects: [
-                {
-                    name: '>',
-                    output: true,
-                    callback: function(this: JQueryTerminal, file: string) {
-                        const fullname = path.resolve(cwd, file);
-                        return this.read('').then(text => {
-                            if (typeof text !== 'undefined') {
-                                return fs.writeFile(fullname, text);
-                            }
-                        });
-                    }
-                }
-            ]
-        }),
+        async function(command: string) {
+            await bash.evaluate(command);
+        },
         { rpc: rpc_url }
     ];
 });
@@ -351,10 +407,6 @@ const term = $('body').terminal(intepreter, {
     processArguments: false,
     execHistory: true,
     greetings: null,
-    prompt() {
-        const path = cwd === '/' ? '~' : cwd.replace(default_dir, '~/');
-        return `<DodgerBlue>${path}</DodgerBlue>:&gt; `;
-    },
     onInit() {
         this.echo(() => {
             const cols = this.cols();
