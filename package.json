@@ -25,6 +25,7 @@
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.7.0",
     "@jcubic/json-rpc": "^1.0.0",
+    "jquery": "^3.7.1",
     "jquery.terminal": "github:jcubic/jquery.terminal#devel",
     "path-browserify": "^1.0.1"
   },
