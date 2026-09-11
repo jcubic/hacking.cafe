@@ -183,9 +183,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 try {
                     let arg = null;
                     if (args.length) {
-                        if (Number.isInteger(args[0])) {
-                            arg = args[0];
-                        } else {
+                        arg =  parseInt(args[0], 10)
+                        if (!Number.isInteger(arg)) {
                             this.stderr.writeln('invalid RFC number');
                         }
                     }
@@ -237,7 +236,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         const command = $(this).attr('href') as string;
         // are we inside RFC browser?
         if (term.level() >= 2) {
-            commands.rfc.call(term, parseInt(command, 10) as any);
+            bash.exec('rfc', command);
         } else {
             term.exec(`rfc ${command}`, { typing: true, delay });
         }

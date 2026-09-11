@@ -54,6 +54,16 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
+    command_exists(command: string) {
+        return Object.hasOwn(this._env, command);
+    }
+
+    // -------------------------------------------------------------------------
+    async exec(command: string, ...args: string[]) {
+        return await this._env[command].apply(this._context, args);
+    }
+
+    // -------------------------------------------------------------------------
     async evaluate(code: string) {
         if (code.trim()) {
             const ast = parse(code);
@@ -111,8 +121,8 @@ export class Bash {
         }
         const command = ast.name.value;
         const args = ast.suffix.map((suffix: Command['suffix'][0]) => suffix.value);
-        if (Object.hasOwn(this._env, command)) {
-            await this._env[command].apply(this._context, args);
+        if (this.command_exists(command)) {
+            await this.exec(command, ...args);
 
             if (ast.redirects.length) {
                 for (const redirect of ast.redirects) {
