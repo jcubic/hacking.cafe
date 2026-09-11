@@ -55,6 +55,30 @@ class Service {
     }
 
     // ------------------------------------------------------------------------
+    public function ip() {
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            return $_SERVER['HTTP_X_FORWARDED_FOR'];
+        }
+
+        $ip = $_SERVER['REMOTE_ADDR'];
+
+        if ($ip === '::1' || $ip === '127.0.0.1') {
+            $result = json_decode($this->get('https://api.ipify.org?format=json'));
+            return $result->ip;
+        }
+
+        return $ip;
+    }
+
+    // ------------------------------------------------------------------------
+    public function location() {
+        $env = parse_ini_file('.env');
+        $api_key = $env['GEO_IP_API_KEY'];
+        $ip = $this->ip();
+        return json_decode($this->get("https://api.ip2location.io/?key=$api_key&&ip=$ip"));
+    }
+
+    // ------------------------------------------------------------------------
     private function curl($url) {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);

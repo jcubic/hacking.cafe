@@ -2,3 +2,4 @@ node_modules
 dist
 api/vendor/
 api/fs.db
+api/.env
