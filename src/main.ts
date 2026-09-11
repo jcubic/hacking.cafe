@@ -316,23 +316,26 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     term.option('completion', completion);
 
     // -------------------------------------------------------------------------
-    return $.terminal.pipe(commands, {
-        processArguments: false,
-        redirects: [
-            {
-                name: '>',
-                output: true,
-                callback: function(this: JQueryTerminal, file: string) {
-                    const fullname = path.resolve(cwd, file);
-                    return this.read('').then(text => {
-                        if (typeof text !== 'undefined') {
-                            return fs.writeFile(fullname, text);
-                        }
-                    });
+    return [
+        $.terminal.pipe(commands, {
+            processArguments: false,
+            redirects: [
+                {
+                    name: '>',
+                    output: true,
+                    callback: function(this: JQueryTerminal, file: string) {
+                        const fullname = path.resolve(cwd, file);
+                        return this.read('').then(text => {
+                            if (typeof text !== 'undefined') {
+                                return fs.writeFile(fullname, text);
+                            }
+                        });
+                    }
                 }
-            }
-        ]
-    });
+            ]
+        }),
+        { rpc: rpc_url }
+    ];
 });
 
 const formatter = new Intl.ListFormat('en', {
