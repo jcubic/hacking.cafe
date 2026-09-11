@@ -146,6 +146,7 @@ class Service {
         return $page ? mb_convert_encoding($page, 'UTF-8', 'UTF-8') : null;
     }
 
+    // ------------------------------------------------------------------------
     public function fs_get($name) {
         $stmt = $this->fs_db->prepare('SELECT data FROM fs WHERE name = ?');
         $stmt->execute([$name]);
@@ -153,6 +154,8 @@ class Service {
         // data is base64 encoded, so it can hold binary files
         return $row ? base64_encode($row['data']) : null;
     }
+
+    // ------------------------------------------------------------------------
     public function fs_set($name, $data) {
         $binary = base64_decode($data, true);
         if ($binary === false) {
@@ -164,11 +167,14 @@ class Service {
         $stmt->execute();
         return true;
     }
+
+    // ------------------------------------------------------------------------
     public function fs_delete($name) {
         $stmt = $this->fs_db->prepare('DELETE FROM fs WHERE name = ?');
         $stmt->execute([$name]);
         return $stmt->rowCount() > 0;
     }
+
     // ------------------------------------------------------------------------
     public function hello($name) {
         return "hello, <white>$name</white>!";
