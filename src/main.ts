@@ -46,14 +46,16 @@ class BufferOutput implements Stdout {
 class BufferError extends BufferOutput {
     flush() {
         if (this._buffer.length) {
-            this._term.error(this.output());
+            this._term.echo(`<red>${this.output()}</red>`, {
+                newline: false
+            });
             this.clear();
         }
     }
 }
 
 class Input implements Stdin {
-    private _term: JQueryTerminal;
+    protected _term: JQueryTerminal;
     constructor(term: JQueryTerminal) {
         this._term = term;
     }
@@ -61,7 +63,6 @@ class Input implements Stdin {
         return this._term.read('');
     }
 }
-
 
 const intepreter = rpc({ url: rpc_url }).then(service => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
@@ -85,12 +86,12 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 try {
                     const stat = await fs.stat(dirname);
                     if (stat.isFile()) {
-                        term.error(`"${dirname}" is not directory`);
+                        this.stderr.writeln(`"${dirname}" is not directory`);
                     } else {
                         this.cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
                     }
                 } catch (e: any) {
-                    term.error("Directory don't exits");
+                    this.stderr.writeln("Directory don't exits");
                 }
             } else {
                 this.cwd = default_dir;
@@ -120,7 +121,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 }
                 content = files.join('');
             }
-            this.stdout.writeln(content);
+            this.stdout.write(content);
         },
         // ---------------------------------------------------------------------
         mkdir: async function(this: BashContext, args: string) {
@@ -171,7 +172,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             }
         },
         // ---------------------------------------------------------------------
-        async rfc(this: JQueryTerminal, ...args: string[]) {
+        async rfc(this: BashContext, ...args: string[]) {
 
             if (args[0] == '--help') {
                 term.echo('Browser of RFC documents, using less unix command.\n\n' +
@@ -185,13 +186,13 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                         if (Number.isInteger(args[0])) {
                             arg = args[0];
                         } else {
-                            this.error('invalid RFC number');
+                            this.stderr.writeln('invalid RFC number');
                         }
                     }
                     const rfc = await service.rfc(arg);
                     display_rfc(rfc as string);
                 } catch (err) {
-                    this.error((err as Error).message);
+                    this.stderr.writeln((err as Error).message);
                 }
             }
         },

@@ -86,11 +86,18 @@ export class Bash {
         if (ast.target) {
             switch (ast.operator) {
                 case '>': {
-                    const { fs, stdout, cwd } = this._context;
+                    const { fs, stdout, stderr, cwd } = this._context;
                     const file = ast.target.value;
                     const fullname = path.resolve(cwd, file);
-                    await fs.writeFile(fullname, stdout.output());
-                    stdout.clear();
+                    let content;
+                    if (ast.fileDescriptor === 2) {
+                        content = stderr.output();
+                        stderr.clear();
+                    } else {
+                        content = stdout.output();
+                        stdout.clear();
+                    }
+                    await fs.writeFile(fullname, content);
                     break;
                 }
             }
@@ -112,7 +119,8 @@ export class Bash {
                     await this.redirect(redirect);
                 }
             }
-            const { stdout } = this._context;
+            const { stdout, stderr } = this._context;
+            stderr.flush();
             stdout.flush();
         } else {
             throw new Error(`command '${command}' not found!`);
