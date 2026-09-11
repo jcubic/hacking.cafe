@@ -11,6 +11,8 @@ import type {
     Redirect
 } from 'unbash';
 
+type Suffix = Command['suffix'][0];
+
 type PromiseOrType<T> = T | PromiseLike<T>;
 
 
@@ -27,8 +29,11 @@ export interface Stdin {
     read(): TypeOrPromise<string>;
 }
 
+export type BashCommand = (this: BashContext, ...args: string[]) =>
+    PromiseOrType<void | number>;
+
 export type Environment = {
-    [key: string]: (this: BashContext, ...args: string[]) => PromiseOrType<void | number>;
+    [key: string]: BashCommand;
 };
 
 
@@ -59,8 +64,8 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    async exec(command: string, ...args: string[]) {
-        return await this._env[command].apply(this._context, args);
+    exec(command: string, ...args: string[]): ReturnType<BashCommand> {
+        return this._env[command].apply(this._context, args);
     }
 
     // -------------------------------------------------------------------------
@@ -115,12 +120,24 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
+    suffix(ast: Suffix[]) {
+        const args = [];
+        for (const suffix of ast) {
+            if (suffix.parts) {
+                throw new Error('Complex patterns not supported');
+            }
+            args.push(suffix.value);
+        }
+        return args;
+    }
+
+    // -------------------------------------------------------------------------
     async command(ast: Command) {
         if (!ast.name) {
             throw new Error('Invalid Command');
         }
         const command = ast.name.value;
-        const args = ast.suffix.map((suffix: Command['suffix'][0]) => suffix.value);
+        const args = this.suffix(ast.suffix);
         if (this.command_exists(command)) {
             await this.exec(command, ...args);
 
