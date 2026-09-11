@@ -123,9 +123,6 @@ export class Bash {
     suffix(ast: Suffix[]) {
         const args = [];
         for (const suffix of ast) {
-            if (suffix.parts) {
-                throw new Error('Complex patterns not supported');
-            }
             args.push(suffix.value);
         }
         return args;
