@@ -76,8 +76,29 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             await service.hello(name);
         },
         // ---------------------------------------------------------------------
-        echo(this: BashContext, ...args: []) {
+        echo(this: BashContext, ...args: string[]) {
             this.stdout.writeln(args.join(' '));
+        },
+        // ---------------------------------------------------------------------
+        async rm(this: BashContext, ...args: string[]) {
+            const options = $.terminal.parse_options(args);
+            try {
+                for (const file of args) {
+                    const pathname = path.resolve(this.cwd, file);
+                    const stat = await fs.stat(pathname);
+                    if (stat.isDirectory()) {
+                        if (options.r) {
+                            rmdir(pathname);
+                        } else {
+                            this.stderr.writeln(`${file} is a directory`);
+                        }
+                    } else {
+                        fs.unlink(pathname);
+                    }
+                }
+            } catch(e) {
+                this.stderr.writeln((e as Error).message);
+            }
         },
         // ---------------------------------------------------------------------
         async cd(this: BashContext, dir?: string) {
@@ -308,6 +329,23 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     }
 
     // -------------------------------------------------------------------------
+    async function rmdir(dir: string) {
+        const list = await fs.readdir(dir);
+        for(const name of list) {
+            const filename = path.join(dir, name);
+            const stat = await fs.stat(filename);
+            if (!filename.match(/^\.{1,2}$/)) {
+                if(stat.isDirectory()) {
+                    await rmdir(filename);
+                } else {
+                    fs.unlink(filename);
+                }
+            }
+        }
+        await fs.rmdir(dir);
+    }
+
+    // -------------------------------------------------------------------------
     function get_path(string: string) {
         let path = bash.cwd().replace(/^\//, '').split('/');
         if (path[0] === '') {
@@ -371,10 +409,14 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     term.option('completion', completion);
 
+    const stdout = new BufferOutput(term);
+    const stderr = new BufferError(term);
+    const stdin = new Input(term);
+
     const bash = new Bash(commands, {
-        stdout: new BufferOutput(term),
-        stderr: new BufferError(term),
-        stdin: new Input(term),
+        stdout,
+        stderr,
+        stdin,
         fs,
         cwd: default_dir
     });
@@ -387,8 +429,12 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     // -------------------------------------------------------------------------
     return [
-        async function(command: string) {
-            await bash.evaluate(command);
+        async function(this: JQueryTerminal, command: string) {
+            try {
+                await bash.evaluate(command);
+            } catch(e) {
+                this.error((e as Error).message);
+            }
         },
         { rpc: rpc_url }
     ];
