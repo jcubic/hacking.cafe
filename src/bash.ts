@@ -182,6 +182,7 @@ export class Bash {
         switch (ast.type) {
             case 'DoubleQuoted':
                 return this.quote(ast);
+            case 'SingleQuoted':
             case 'Literal':
                 return ast.value;
             case 'SimpleExpansion': {
