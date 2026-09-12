@@ -8,6 +8,7 @@ import type {
     Command,
     Node,
     Word,
+    Pipeline,
     WordPart,
     DoubleQuotedPart,
     DoubleQuotedChild,
@@ -24,8 +25,48 @@ export interface Stdout {
     writeln(str: string): void;
 }
 
+export class BufferOutput implements Stdout {
+    protected _buffer: string[];
+    constructor(buffer = []) {
+        this._buffer = buffer;
+    }
+    output() {
+        return this._buffer.join('');
+    }
+    flush() {
+        if (this._buffer.length) {
+            this.clear();
+        }
+    }
+    clear() {
+        this._buffer = [];
+    }
+    write(str: string) {
+        this._buffer.push(str);
+    }
+    writeln(str: string) {
+        this.write(str + '\n');
+    }
+}
+
+class PipeOutput extends BufferOutput {
+    get buffer() {
+        return this._buffer;
+    }
+}
+
 export interface Stdin {
     read(): TypeOrPromise<string>;
+}
+
+class PipeStdin implements Stdin {
+    protected _buffer: string[];
+    constructor(buffer: string[]) {
+        this._buffer = buffer;
+    }
+    read() {
+        return this._buffer.join('');
+    }
 }
 
 export type BashCommand = (this: BashContext, ...args: string[]) =>
@@ -178,7 +219,24 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    async command(ast: Command) {
+    async pipeline(ast: Pipeline) {
+        const { stdin, stdout, stderr } = this._context;
+        const commands = [...ast.commands];
+        const output = new PipeOutput();
+        this._context.stdout = output;
+        while (commands.length > 1) {
+            const command = commands.shift();
+            await this.command(command as Command, true);
+            this._context.stdin = new PipeStdin(output.buffer);
+            output.flush();
+        }
+        Object.assign(this._context, { stdout, stderr });
+        await this.command(commands.pop() as Command);
+        this._context.stdin = stdin;
+    }
+
+    // -------------------------------------------------------------------------
+    async command(ast: Command, pipe = false) {
         if (!ast.name) {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
@@ -198,9 +256,11 @@ export class Bash {
                     await this.redirect(redirect);
                 }
             }
-            const { stdout, stderr } = this._context;
-            stderr.flush();
-            stdout.flush();
+            if (!pipe) {
+                const { stdout, stderr } = this._context;
+                stderr.flush();
+                stdout.flush();
+            }
         } else {
             throw new Error(`command '${command}' not found!`);
         }

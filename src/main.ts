@@ -6,7 +6,7 @@ import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
 import { color } from './colors';
-import { Bash, Stdout, Stdin, PromisifiedFS, BashContext } from './bash';
+import { Bash, BufferOutput, Stdin, PromisifiedFS, BashContext } from './bash';
 
 const DEV = import.meta.env.DEV;
 
@@ -17,15 +17,12 @@ const rpc_url = DEV ? 'http://localhost:8810/' : '/api/';
 
 let completion;
 
-class BufferOutput implements Stdout {
-    protected _buffer: string[];
+class BufferTerminalOutput extends BufferOutput {
     protected _term: JQueryTerminal;
     constructor(term: JQueryTerminal) {
-        this._buffer = [];
+        super();
         this._term = term;
-    }
-    output() {
-        return this._buffer.join('');
+        this._buffer = [];
     }
     flush() {
         if (this._buffer.length) {
@@ -35,18 +32,9 @@ class BufferOutput implements Stdout {
             this.clear();
         }
     }
-    clear() {
-        this._buffer = [];
-    }
-    write(str: string) {
-        this._buffer.push(str);
-    }
-    writeln(str: string) {
-        this.write(str + '\n');
-    }
 }
 
-class BufferError extends BufferOutput {
+class BufferError extends BufferTerminalOutput {
     flush() {
         if (this._buffer.length) {
             this._term.echo(`<red>${this.output()}</red>`, {
@@ -81,6 +69,29 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         // ---------------------------------------------------------------------
         echo(this: BashContext, ...args: string[]) {
             this.stdout.writeln(args.join(' '));
+        },
+        async grep(this: BashContext, ...args: string[]) {
+            const options = $.terminal.parse_options(args, {
+                boolean: ['i', 'v']
+            } as any);
+            let [pattern, ...files] = options._;
+            let content;
+            if (!files.length) {
+                content = await this.stdin.read();
+            } else {
+                content = await this.fs.readFile(files[0], 'utf8');
+            }
+            if (options.F) {
+                pattern = RegExp.escape(pattern);
+            }
+            const re = new RegExp(pattern, options.i ? 'i' : '');
+            const lines = content.split('\n');
+            for (const line of lines) {
+                const match = line.match(re);
+                if ((options.v && !match) || (!options.v && match)) {
+                    this.stdout.writeln(line);
+                }
+            }
         },
         // ---------------------------------------------------------------------
         async rm(this: BashContext, ...args: string[]) {
@@ -412,7 +423,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     term.option('completion', completion);
 
-    const stdout = new BufferOutput(term);
+    const stdout = new BufferTerminalOutput(term);
     const stderr = new BufferError(term);
     const stdin = new Input(term);
 
