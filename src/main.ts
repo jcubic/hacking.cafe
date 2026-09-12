@@ -62,13 +62,45 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     // TODO default should be ~
     const default_dir = '/';
 
+    function char(int: number) {
+        return String.fromCharCode(int);
+    }
+
     const commands = {
         async hello(name: string) {
             await service.hello(name);
         },
         // ---------------------------------------------------------------------
         echo(this: BashContext, ...args: string[]) {
-            this.stdout.writeln(args.join(' '));
+            const options = $.terminal.parse_options(args, {
+                boolean: ['e', 'n']
+            } as any);
+            let output = options._.join(' ');
+            if (options.e) {
+                const re = /\\([\\ntb]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
+                output = output.replace(re, (_, str) => {
+                    switch (str[0]) {
+                        case '\\':
+                            return '\\';
+                        case 'n':
+                            return '\n';
+                        case 'b':
+                            return '\b';
+                        case 't':
+                            return '\t';
+                        case '0':
+                            return char(parseInt(str.substring(1), 8));
+                        case 'x':
+                            return char(parseInt(str.substring(1), 16));
+                    }
+                    return '';
+                });
+            }
+            if (options.n) {
+                this.stdout.write(output);
+            } else {
+                this.stdout.writeln(output);
+            }
         },
         async grep(this: BashContext, ...args: string[]) {
             const options = $.terminal.parse_options(args, {
