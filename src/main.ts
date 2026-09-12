@@ -111,7 +111,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             if (!files.length) {
                 content = await this.stdin.read();
             } else {
-                content = await this.fs.readFile(files[0], 'utf8');
+                const fullname = path.resolve(this.cwd, files[0]);
+                content = await this.fs.readFile(fullname, 'utf8');
             }
             if (options.F) {
                 pattern = RegExp.escape(pattern);
