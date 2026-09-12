@@ -193,7 +193,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         },
         // ---------------------------------------------------------------------
         mkdir: async function(this: BashContext, args: string) {
-            const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
+            const options = $.terminal.parse_options(args, {
+                boolean: ['a', 'A']
+            } as any);
             for (const dir of options._) {
                 const fullname = path.resolve(this.cwd, dir);
                 await mkdir(fullname, !!options.p);

@@ -1,5 +1,7 @@
-import type { JQueryTerminal } from './terminal';
+import type { BashContext } from './bash';
 import type { RPCService } from '@jcubic/json-rpc';
+
+
 
 type JargonEntry = {
     term: string;
@@ -30,7 +32,7 @@ function format_entry(entries: JargonEntry[]) {
 }
 
 export function make_jargon(service: RPCService) {
-    return async function(this: JQueryTerminal, ...args: string[]) {
+    return async function(this: BashContext, ...args: string[]) {
         // @ts-expect-error
         const options = $.terminal.parse_options(args, { boolean: ['s'] });
         if (options._.length) {
@@ -41,19 +43,17 @@ export function make_jargon(service: RPCService) {
                         query = '%' + query + '%';
                     }
                     const data = await service.jargon_search(query) as Array<{ term: string }>;
-                    this.echo(data.map(({ term }: { term: string }) => {
+                    this.stdout.writeln(data.map(({ term }: { term: string }) => {
                         return `<name>${term}</name>`;
                     }).join('\n'));
                 } else {
                     // normal query
                     const data = await service.jargon(query);
                     const entry = format_entry(data as JargonEntry[]);
-                    this.echo(entry.trim(), {
-                        keepWords: true
-                    });
+                    this.stdout.writeln(entry.trim());
                 }
             } catch (error: any) {
-                this.error(error.message);
+                this.stderr.writeln(error.message);
             }
         } else {
             const msg = 'This is the Jargon File, a comprehens'+
@@ -62,7 +62,7 @@ export function make_jargon(service: RPCService) {
                 'nd humor.\n\nusage: jargon [-s] &lt;QUERY&gt;'+
                 '\n\n-s search jargon file';
             const logo = `<bold><white>${jargon.innerHTML}</white></bold>`;
-            this.echo(`${logo}\n${msg}`, { keepWords: true });
+            this.stdout.writeln(`${logo}\n${msg}`);
         }
     }
 }
