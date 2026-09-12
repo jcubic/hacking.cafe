@@ -19,7 +19,7 @@
     "@types/node": "^22.20.2",
     "@types/path-browserify": "^1.0.3",
     "concurrently": "^10.0.5",
-    "typescript": "^5.8.3",
+    "typescript": "^7.0.2",
     "vite": "^6.3.3",
     "vite-plugin-static-copy": "^4.1.1"
   },
