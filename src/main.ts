@@ -8,9 +8,12 @@ import { RPCBackend } from './fs';
 import { color } from './colors';
 import { Bash, Stdout, Stdin, PromisifiedFS, BashContext } from './bash';
 
-const delay = 80;
+const DEV = import.meta.env.DEV;
 
-const rpc_url = import.meta.env.DEV ? 'http://localhost:8810/' : '/api/';
+const delay = 80;
+const DEBUG = DEV;
+
+const rpc_url = DEV ? 'http://localhost:8810/' : '/api/';
 
 let completion;
 
@@ -271,10 +274,10 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     // -------------------------------------------------------------------------
     async function list_dir(dir: string): Promise<ListDir> {
-        const dirList = await fs.readdir(dir);
+        const dir_list = await fs.readdir(dir);
         const files: string[] = [];
         const dirs: string[] = [];
-        for (const name of dirList) {
+        for (const name of dir_list) {
             const file = path.join(dir, name);
             try {
                 const stat = await fs.stat(file);
@@ -434,6 +437,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 await bash.evaluate(command);
             } catch(e) {
                 this.error((e as Error).message);
+                if (DEBUG) {
+                    setTimeout(() => { throw e }, 0);
+                }
             }
         },
         { rpc: rpc_url }

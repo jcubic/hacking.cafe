@@ -4,17 +4,17 @@ import path from 'path-browserify';
 export type PromisifiedFS = typeof import('fs/promises');
 
 import type {
-    Pipeline,
     Statement,
     Command,
     Node,
+    Word,
+    WordPart,
+    DoubleQuotedPart,
+    DoubleQuotedChild,
     Redirect
 } from 'unbash';
 
-type Suffix = Command['suffix'][0];
-
 type PromiseOrType<T> = T | PromiseLike<T>;
-
 
 export interface Stdout {
     output(): string;
@@ -24,7 +24,6 @@ export interface Stdout {
     writeln(str: string): void;
 }
 
-
 export interface Stdin {
     read(): TypeOrPromise<string>;
 }
@@ -32,10 +31,15 @@ export interface Stdin {
 export type BashCommand = (this: BashContext, ...args: string[]) =>
     PromiseOrType<void | number>;
 
-export type Environment = {
+export type Commands = {
     [key: string]: BashCommand;
 };
 
+export type Variable = string | string[] | {[key: string]: string};
+
+export type Environment = {
+    [key: string]: Variable | undefined;
+};
 
 export type BashContext = {
     cwd: string;
@@ -46,11 +50,13 @@ export type BashContext = {
 };
 
 export class Bash {
+    private _commands: Commands;
     private _env: Environment;
     private _context: BashContext;
-    constructor(env = {}, context: BashContext) {
-        this._env = env;
+    constructor(commands = {}, context: BashContext) {
+        this._commands = commands;
         this._context = context;
+        this._env = Object.create(null);
     }
 
     // -------------------------------------------------------------------------
@@ -59,13 +65,21 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    command_exists(command: string) {
-        return Object.hasOwn(this._env, command);
+    command_exists(command: any): command is keyof Commands {
+        return Object.hasOwn(this._commands, command);
     }
 
     // -------------------------------------------------------------------------
     exec(command: string, ...args: string[]): ReturnType<BashCommand> {
-        return this._env[command].apply(this._context, args);
+        return this._commands[command].apply(this._context, args);
+    }
+
+    // -------------------------------------------------------------------------
+    variable(name: string) {
+        if (Object.hasOwn(this._env, name)) {
+            return this._env[name];
+        }
+        throw new Error(`Undefined variable ${name}`);
     }
 
     // -------------------------------------------------------------------------
@@ -88,12 +102,6 @@ export class Bash {
         } else {
             throw new Error(`Unkown node '${type}'!`);
         }
-    }
-
-    // -------------------------------------------------------------------------
-    pipeline(ast: Pipeline) {
-        ast.commands;
-        console.log(ast);
     }
 
     // -------------------------------------------------------------------------
@@ -120,21 +128,68 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    suffix(ast: Suffix[]) {
+    resolve(ast: Word) {
+        if (!ast.parts?.length) {
+            return ast.value;
+        }
+        const [ part ] = ast.parts;
+        return this.simple(part);
+    }
+
+    // -------------------------------------------------------------------------
+    simple(ast: WordPart | DoubleQuotedChild) {
+        switch (ast.type) {
+            case 'DoubleQuoted':
+                return this.quote(ast);
+            case 'Literal':
+                return ast.value;
+            case 'SimpleExpansion': {
+                const value = ast.text;
+                if (value.startsWith('$')) {
+                    return this.variable(value);
+                }
+                break;
+            }
+            case 'ParameterExpansion': {
+                if (ast.operator) {
+                    throw new Error(`Unkown Bash substitution ${ast.text}`);
+                }
+                return this.variable(ast.parameter);
+            }
+            case 'CommandExpansion':
+            case 'ArithmeticExpansion':
+        }
+        throw new Error(`Unkown Bash expression ${ast.text}`);
+    }
+
+    // -------------------------------------------------------------------------
+    suffix(ast: Word[]) {
         const args = [];
         for (const suffix of ast) {
-            args.push(suffix.value);
+            args.push(this.resolve(suffix));
         }
         return args;
+    }
+
+    quote(ast: DoubleQuotedPart): string {
+        return ast.parts.map(part => {
+            return this.simple(part);
+        }).join('');
     }
 
     // -------------------------------------------------------------------------
     async command(ast: Command) {
         if (!ast.name) {
-            throw new Error('Invalid Command');
+            if (ast.prefix.length) {
+                const [ prefix ] = ast.prefix;
+                if (prefix.type === 'Assignment' && prefix.value) {
+                    this._env['$' + prefix.name] = this.resolve(prefix.value);
+                }
+            }
+            return;
         }
-        const command = ast.name.value;
-        const args = this.suffix(ast.suffix);
+        const command = this.resolve(ast.name);
+        const args = this.suffix(ast.suffix) as string[];
         if (this.command_exists(command)) {
             await this.exec(command, ...args);
 
