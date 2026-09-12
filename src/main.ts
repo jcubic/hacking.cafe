@@ -230,14 +230,14 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         // ---------------------------------------------------------------------
         jargon: make_jargon(service),
         // ---------------------------------------------------------------------
-        record(this: JQueryTerminal, ...args: string[]) {
+        record(this: BashContext, ...args: string[]) {
             // toggle storing commands in URL hash
             if (args[0] === 'start') {
                 term.history_state(true);
             } else if (args[0] === 'stop') {
                 term.history_state(false);
             } else {
-                this.echo('save commands in url hash so you can rerun them\n\n' +
+                term.echo('save commands in url hash so you can rerun them\n\n' +
                     'usage: record [stop|start]');
             }
         },

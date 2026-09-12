@@ -1,8 +1,6 @@
 import type { BashContext } from './bash';
 import type { RPCService } from '@jcubic/json-rpc';
 
-
-
 type JargonEntry = {
     term: string;
     def: string;
