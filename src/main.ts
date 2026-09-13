@@ -102,7 +102,7 @@ const intepreter = rpc({ url: rpc_url }).then((service) => {
     const fs = _fs.promises as unknown as PromisifiedFS;
 
     const user = 'guest';
-    const home = `/home/${user}/`;
+    const home = `/home/${user}`;
 
     const commands = {
         async hello(name: string) {
@@ -317,7 +317,7 @@ const intepreter = rpc({ url: rpc_url }).then((service) => {
 
     term.set_prompt(() => {
         const cwd = bash.cwd;
-        const path = cwd === bash.home ? '~' : cwd.replace(bash.home, '~/');
+        const path = cwd.replace(bash.home, '~');
         return [
             color('green', `${user}@hacking.cafe`),
             ':',
