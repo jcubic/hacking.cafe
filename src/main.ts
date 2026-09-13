@@ -65,6 +65,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;
 
+    const user = 'kuba';
+
     const commands = {
         async hello(name: string) {
             await service.hello(name);
@@ -93,6 +95,46 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 term.echo('save commands in url hash so you can rerun them\n\n' +
                     'usage: record [stop|start]');
             }
+        },
+        // ---------------------------------------------------------------------
+        async fetch(this: BashContext) {
+            const cols = term.cols();
+            const fetch = neofetch.innerHTML;
+            const lang = (new Intl.NumberFormat()).resolvedOptions().locale;
+            const lines = fetch.split('\n');
+            const gap = 3;
+            const fetch_width = $.terminal.length(lines[0]);
+            const space = cols - fetch_width - gap;
+            const rows = lines.length;
+            const server = `${user}@hacking.cafe`;
+            const battery = await navigator.getBattery();
+            const meta = {
+                Langauge: lang,
+                Terminal: `jQuery Terminal ${$.terminal.version}`,
+                'User-Agent': navigator.userAgent,
+                'IP': await service.ip(),
+                'Battery': [
+                    battery.level * 100,
+                    '% ',
+                    battery.charging ? '[AC Connected]' : '[Discharging]'
+                ].join('')
+            };
+            const info = [
+                `<white>${server}</white>`,
+                '-'.repeat(server.length)
+            ];
+            for (const [key, value] of Object.entries(meta)) {
+                let formatted = `[[;white;]${$.terminal.escape_brackets(value)}]`;
+                const text = `[[;#F7DF1E;]${key}]: ${formatted}`;
+                const lines = $.terminal.split_equal(text, space);
+                info.push(...lines);
+            }
+            this.stdout.writeln(lines.map((line, index) => {
+                if (info[index]) {
+                    return line + '   ' + info[index];
+                }
+                return line;
+            }).join('\n'));
         },
         // ---------------------------------------------------------------------
         async rfc(this: BashContext, ...args: string[]) {
@@ -127,6 +169,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                     'and Rectangles fonts',
                 '* [[!b;#fff;;;http://catb.org/jargon/html/index.html]Jargon File] 4.4.7',
                 '* [[!b;#fff;;;https://www.rfc-editor.org/]RFC Editor]',
+                '* [[!b;#fff;;;https://codepen.io/Boowoa/full/abxxXqb]JS ASCII logo] by @Boowoa',
                 ''
             ].join('\n');
             this.stdout.writeln(text);
@@ -235,6 +278,7 @@ const term = $('body').terminal(intepreter, {
     processArguments: false,
     execHistory: true,
     greetings: null,
+    convertLinks: false,
     onInit() {
         this.echo(() => {
             const cols = this.cols();
