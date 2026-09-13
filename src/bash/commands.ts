@@ -12,7 +12,7 @@ export function echo(this: BashContext, ...args: string[]) {
     } as any);
     let output = options._.join(' ');
     if (options.e) {
-        const re = /\\([\\ntb]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
+        const re = /\\([\\ntbe]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
         output = output.replace(re, (_, str) => {
             switch (str[0]) {
                 case '\\':
@@ -23,6 +23,8 @@ export function echo(this: BashContext, ...args: string[]) {
                     return '\b';
                 case 't':
                     return '\t';
+                case 'e':
+                    return char(0x1b);
                 case '0':
                     return char(parseInt(str.substring(1), 8));
                 case 'x':
