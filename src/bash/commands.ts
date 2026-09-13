@@ -119,7 +119,7 @@ export async function cd(this: BashContext, dir?: string) {
                 this.cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
             }
         } catch (e: any) {
-            this.stderr.writeln("Directory don't exits");
+            this.stderr.writeln("Directory doesn't exits");
         }
     } else {
         this.cwd = this.home;
