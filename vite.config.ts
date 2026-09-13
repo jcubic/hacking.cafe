@@ -43,6 +43,11 @@ export default defineConfig({
                     dest: '.'
                 },
                 {
+                    src: 'public/favicon/favicon.ico',
+                    dest: '.',
+                    rename: { stripBase: true }
+                },
+                {
                     src: 'api/fs/*.php',
                     dest: '.'
                 },
