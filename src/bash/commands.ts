@@ -157,8 +157,8 @@ export async function mkdir(this: BashContext, ...args: string[]) {
 export function pwd(this: BashContext) {
     this.stdout.writeln(this.cwd);
 }
-// ---------------------------------------------------------------------
 
+// ---------------------------------------------------------------------
 export async function ls(this: BashContext, ...args: string[]) {
     const options = parse_options(args, { boolean: ['a', 'A'] });
     function filter(list: string[]) {

@@ -101,7 +101,7 @@ export class Bash implements BashInterpreter {
     private _env: Environment;
     private _context: BashContext;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
-        this._commands = {...builtins, ...commands}
+        this._commands = { ...builtins, ...commands };
         this._context = { cwd: context.home, bash: this, ...context };
         this._env = Object.create(null);
     }
