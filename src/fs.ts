@@ -1,21 +1,39 @@
-/**
- * RPCBackend — LightningFS storage backend that persists data
- * on the server through the JSON-RPC fs_* methods.
+/*
+ *  RPCBackend — LightningFS storage backend that persists data
+ *  on the server through the JSON-RPC fs_* methods.
  *
- * Drop it in via the `db` option when constructing LightningFS:
+ *  Drop it in via the `db` option when constructing LightningFS:
  *
- * ```ts
- * import LightningFS from '@isomorphic-git/lightning-fs';
- * import rpc from '@jcubic/json-rpc';
- * import { RPCBackend } from './fs';
+ *  ```ts
+ *  import LightningFS from '@isomorphic-git/lightning-fs';
+ *  import rpc from '@jcubic/json-rpc';
+ *  import { RPCBackend } from './fs';
  *
- * const service = await rpc({ url: '/api' });
- * const fs = new LightningFS('rpc', { db: new RPCBackend(service) });
- * ```
+ *  const service = await rpc({ url: '/api' });
+ *  const fs = new LightningFS('rpc', { db: new RPCBackend(service) });
+ *  ```
  *
- * Values are serialized to base64 before sending, so both text
- * and binary files are supported (Uint8Array, and the superblock
- * Map serialized as [key, value] entries).
+ *  Values are serialized to base64 before sending, so both text
+ *  and binary files are supported (Uint8Array, and the superblock
+ *  Map serialized as [key, value] entries).
+ *
+ *  Copyright (c) 2026 Jakub T. Jankiewicz <https://jakub.jankiewicz.org>
+ *
+ *  This file is part of Hacking Cafe.
+ *
+ *  Hacking Cafe is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU Affero General Public License as published by
+ *  the Free Software Foundation; either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  Hacking Cafe is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU Affero General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Affero General Public License
+ *  along with Hacking Cafe.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 import type { RPCService } from '@jcubic/json-rpc';
