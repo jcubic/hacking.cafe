@@ -1,2 +1,6 @@
 RewriteEngine On
 RewriteRule ^(\.env|fs\.db)$ - [R=404,L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /api/fs.php?path=$1 [L]
