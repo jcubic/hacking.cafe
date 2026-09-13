@@ -142,14 +142,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             const logo_width = $.terminal.length(lines[0]);
             const space = cols - logo_width - gap - 2;
             const server = `${user}@hacking.cafe`;
-            const battery = await (navigator as any).getBattery();
             const user_data = LocationSchema.parse(await service.location());
-            // @ts-expect-error
-            const battery_status = [
-                battery.level * 100,
-                '% ',
-                battery.charging ? '[AC Connected]' : '[Discharging]'
-            ].join('');
 
             const dark_mode = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const {
@@ -184,6 +177,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 '-'.repeat(server.length)
             ];
             for (const [key, value] of Object.entries(meta)) {
+                if (!value) {
+                    continue;
+                }
                 const escape = $.terminal.escape_brackets(value as string);
                 let formatted = `[[;white;]${escape}]`;
                 const text = `[[;#F7DF1E;]${key}]: ${formatted}`;
@@ -397,14 +393,15 @@ function gpu() {
 
 function system_details() {
     // @ts-expect-error
-    const browser = navigator.userAgentData.brands.at(-1);
+    const OS = navigator.oscpu || navigator.platform;
+    // @ts-expect-error
+    const browser = navigator.userAgentData && navigator.userAgentData.brands.at(-1);
     return {
         Resolution: `${screen.width}x${screen.height}`,
-        Browser: `${browser.brand} ${browser.version}`,
+        Browser: browser ? `${browser.brand} ${browser.version}` : navigator.userAgent,
+        OS,
         // @ts-expect-error
-        OS: navigator.userAgentData.platform,
-        // @ts-expect-error
-        RAM: `${navigator.deviceMemory}GB`,
+        RAM: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : null,
         CPU: `${navigator.hardwareConcurrency} threads`,
         GPU: gpu().renderer,
         Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
