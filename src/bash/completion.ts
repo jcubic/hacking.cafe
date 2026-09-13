@@ -1,0 +1,55 @@
+import { BashContext, ListDir } from './types';
+import { list_dir } from './utils';
+
+function trailing(list: string[]) {
+    return list.map((dir: string) => dir + '/');
+}
+
+function get_path(cwd: string, string: string) {
+    let path = cwd.replace(/^\//, '').split('/');
+    if (path[0] === '') {
+        path = path.slice(1);
+    }
+    var parts = string === '/'
+        ? string.split('/')
+        : string.replace(/\/?[^\/]*$/, '').split('/');
+    if (parts[0] === '') {
+        parts = parts.slice(1);
+    }
+    if (string === '/') {
+        return [];
+    } else if (string.startsWith('/')) {
+        return parts;
+    } else if (path.length) {
+        return path.concat(parts);
+    } else {
+        return parts;
+    }
+}
+
+type ProcessCallback = (arg: ListDir) => string[];
+
+async function process_assets(bash: BashContext, command: string, callback: ProcessCallback) {
+    function prepend(list: string[]) {
+        if (command.match(/\//) || (!command.trim() && bash.cwd === '/')) {
+            var path = command.replace(/\/[^\/]+$/, '').replace(/\/+$/, '');
+            return list.map((dir: string) => path + '/' + dir);
+        } else {
+            return list;
+        }
+    }
+    var dir = get_path(bash.cwd, command);
+    return prepend(callback(await list_dir(bash.fs, '/' + dir.join('/'))));
+}
+
+export function complete_file(bash: BashContext, command: string) {
+    return process_assets(bash, command, (content: ListDir) => {
+        return trailing(content.dirs).concat(content.files);
+    });
+}
+
+export function complete_directory(bash: BashContext, command: string) {
+    return process_assets(bash, command, (content: ListDir) => {
+        return trailing(content.dirs);
+    });
+}

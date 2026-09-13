@@ -5,8 +5,16 @@ import path from 'path-browserify';
 import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
-import { color } from './colors';
-import { Bash, BufferOutput, Stdin, PromisifiedFS, BashContext } from './bash';
+
+import {
+    Bash,
+    color,
+    BufferOutput,
+    Stdin,
+    PromisifiedFS,
+    BashContext,
+    Completion
+} from './bash';
 
 const DEV = import.meta.env.DEV;
 
@@ -14,8 +22,6 @@ const delay = 80;
 const DEBUG = DEV;
 
 const rpc_url = DEV ? 'http://localhost:8810/' : '/api/';
-
-let completion;
 
 class BufferTerminalOutput extends BufferOutput {
     protected _term: JQueryTerminal;
@@ -62,108 +68,9 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     // TODO default should be ~
     const default_dir = '/';
 
-    function char(int: number) {
-        return String.fromCharCode(int);
-    }
-
     const commands = {
         async hello(name: string) {
             await service.hello(name);
-        },
-        // ---------------------------------------------------------------------
-        echo(this: BashContext, ...args: string[]) {
-            const options = $.terminal.parse_options(args, {
-                boolean: ['e', 'n']
-            } as any);
-            let output = options._.join(' ');
-            if (options.e) {
-                const re = /\\([\\ntb]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
-                output = output.replace(re, (_, str) => {
-                    switch (str[0]) {
-                        case '\\':
-                            return '\\';
-                        case 'n':
-                            return '\n';
-                        case 'b':
-                            return '\b';
-                        case 't':
-                            return '\t';
-                        case '0':
-                            return char(parseInt(str.substring(1), 8));
-                        case 'x':
-                            return char(parseInt(str.substring(1), 16));
-                    }
-                    return '';
-                });
-            }
-            if (options.n) {
-                this.stdout.write(output);
-            } else {
-                this.stdout.writeln(output);
-            }
-        },
-        async grep(this: BashContext, ...args: string[]) {
-            const options = $.terminal.parse_options(args, {
-                boolean: ['i', 'v']
-            } as any);
-            let [pattern, ...files] = options._;
-            let content;
-            if (!files.length) {
-                content = await this.stdin.read();
-            } else {
-                const fullname = path.resolve(this.cwd, files[0]);
-                content = await this.fs.readFile(fullname, 'utf8');
-            }
-            if (options.F) {
-                pattern = RegExp.escape(pattern);
-            }
-            const re = new RegExp(pattern, options.i ? 'i' : '');
-            const lines = content.split('\n');
-            for (const line of lines) {
-                const match = line.match(re);
-                if ((options.v && !match) || (!options.v && match)) {
-                    this.stdout.writeln(line);
-                }
-            }
-        },
-        // ---------------------------------------------------------------------
-        async rm(this: BashContext, ...args: string[]) {
-            const options = $.terminal.parse_options(args);
-            try {
-                for (const file of args) {
-                    const pathname = path.resolve(this.cwd, file);
-                    const stat = await fs.stat(pathname);
-                    if (stat.isDirectory()) {
-                        if (options.r) {
-                            rmdir(pathname);
-                        } else {
-                            this.stderr.writeln(`${file} is a directory`);
-                        }
-                    } else {
-                        fs.unlink(pathname);
-                    }
-                }
-            } catch(e) {
-                this.stderr.writeln((e as Error).message);
-            }
-        },
-        // ---------------------------------------------------------------------
-        async cd(this: BashContext, dir?: string) {
-            if (dir) {
-                const dirname = path.resolve(this.cwd, dir);
-                try {
-                    const stat = await fs.stat(dirname);
-                    if (stat.isFile()) {
-                        this.stderr.writeln(`"${dirname}" is not directory`);
-                    } else {
-                        this.cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
-                    }
-                } catch (e: any) {
-                    this.stderr.writeln("Directory don't exits");
-                }
-            } else {
-                this.cwd = default_dir;
-            }
         },
         // ---------------------------------------------------------------------
         async less(this: BashContext, fname?: string) {
@@ -175,57 +82,6 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 content = await this.stdin.read();
             }
             term.less(content);
-        },
-        // ---------------------------------------------------------------------
-        async cat(this: BashContext, ...args: string[]) {
-            let content;
-            if (args.length === 0) {
-                content = await this.stdin.read();
-            } else {
-                const files = [];
-                for (const name of args) {
-                    const filename = path.resolve(this.cwd, name);
-                    files.push(await fs.readFile(filename, 'utf8'));
-                }
-                content = files.join('');
-            }
-            this.stdout.write(content);
-        },
-        // ---------------------------------------------------------------------
-        mkdir: async function(this: BashContext, args: string) {
-            const options = $.terminal.parse_options(args, {
-                boolean: ['a', 'A']
-            } as any);
-            for (const dir of options._) {
-                const fullname = path.resolve(this.cwd, dir);
-                await mkdir(fullname, !!options.p);
-            }
-        },
-        // ---------------------------------------------------------------------
-        pwd(this: BashContext) {
-            this.stdout.writeln(this.cwd);
-        },
-        // ---------------------------------------------------------------------
-        async ls(this: BashContext, ...args: string[]) {
-            const options = $.terminal.parse_options(args, { boolean: ['a', 'A'] } as any);
-            function filter(list: string[]) {
-                if (options.a) {
-                    return list;
-                } else if (options.A) {
-                    return list.filter(name => !name.match(/^\.{1,2}$/));
-                } else {
-                    return list.filter(name => !name.match(/^\./));
-                }
-            }
-            const dir_path = path.resolve(this.cwd, options._[0] ?? '.');
-            const content = await list_dir(dir_path);
-            const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => {
-                return color('blue', dir);
-            });
-            const result = dirs.concat(filter(content.files));
-            if (result.length) {
-                this.stdout.write(result.join('\n') + '\n');
-            }
         },
         // ---------------------------------------------------------------------
         jargon: make_jargon(service),
@@ -243,7 +99,6 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         },
         // ---------------------------------------------------------------------
         async rfc(this: BashContext, ...args: string[]) {
-
             if (args[0] == '--help') {
                 term.echo('Browser of RFC documents, using less unix command.\n\n' +
                     'If you execute without arguments you will get index page\n' +
@@ -313,144 +168,22 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         return false;
     });
 
-    type ListDir = {
-        files: string[],
-        dirs: string[]
-    };
-
     // -------------------------------------------------------------------------
-    async function list_dir(dir: string): Promise<ListDir> {
-        const dir_list = await fs.readdir(dir);
-        const files: string[] = [];
-        const dirs: string[] = [];
-        for (const name of dir_list) {
-            const file = path.join(dir, name);
-            try {
-                const stat = await fs.stat(file);
-                if (stat.isFile()) {
-                    files.push(name);
-                } else {
-                    dirs.push(name);
-                }
-            } catch(e) {
-                throw new Error(`Internal: scaned file ${file} doesn't exist`);
-            }
-        }
-        return { files, dirs };
-    }
-
-    // -------------------------------------------------------------------------
-    async function stat_or_null(path: string) {
-        try {
-            return await fs.stat(path);
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    async function mkdir(dir: string, parent = false) {
-        if (parent) {
-            const parts = dir.split('/').filter(part => part !== '');
-            if (!parts.length) {
-                throw new Error('Invalid argument');
-            }
-            let full_path = '/';
-            for (const part of parts) {
-                full_path = path.join(full_path, part);
-                const stat = await stat_or_null(full_path);
-                if (!stat) {
-                    await fs.mkdir(full_path);
-                } else if (stat.isFile()) {
-                    throw new Error(`${full_path} is a file`);
-                }
-            }
-        } else {
-            const stat = await stat_or_null(dir);
-            if (!stat) {
-                await fs.mkdir(dir);
-            } else if (stat.isDirectory()) {
-                throw new Error('Directory already exists');
-            } else if (stat.isFile()) {
-                throw new Error(`${dir} is a File`);
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    async function rmdir(dir: string) {
-        const list = await fs.readdir(dir);
-        for(const name of list) {
-            const filename = path.join(dir, name);
-            const stat = await fs.stat(filename);
-            if (!filename.match(/^\.{1,2}$/)) {
-                if(stat.isDirectory()) {
-                    await rmdir(filename);
-                } else {
-                    fs.unlink(filename);
-                }
-            }
-        }
-        await fs.rmdir(dir);
-    }
-
-    // -------------------------------------------------------------------------
-    function get_path(string: string) {
-        let path = bash.cwd().replace(/^\//, '').split('/');
-        if (path[0] === '') {
-            path = path.slice(1);
-        }
-        var parts = string === '/'
-            ? string.split('/')
-            : string.replace(/\/?[^\/]*$/, '').split('/');
-        if (parts[0] === '') {
-            parts = parts.slice(1);
-        }
-        if (string === '/') {
-            return [];
-        } else if (string.startsWith('/')) {
-            return parts;
-        } else if (path.length) {
-            return path.concat(parts);
-        } else {
-            return parts;
-        }
-    }
 
     const command_list = Object.keys(commands);
 
     // -------------------------------------------------------------------------
-    completion = async function(this: JQueryTerminal, string: string) {
-        const cwd = bash.cwd();
+    const completion = async function(this: JQueryTerminal, string: string) {
         var cmd = $.terminal.parse_command(this.before_cursor());
-        async function processAssets(callback: (arg: ListDir) => string[]) {
-            var dir = get_path(string);
-            return callback(await list_dir('/' + dir.join('/')));
-        }
-        function prepend(list: string[]) {
-            if (string.match(/\//) || (!string && cwd === '/')) {
-                var path = string.replace(/\/[^\/]+$/, '').replace(/\/+$/, '');
-                return list.map((dir: string) => path + '/' + dir);
-            } else {
-                return list;
-            }
-        }
-        function trailing(list: string[]) {
-            return list.map((dir: string) => dir + '/');
-        }
         if (cmd.name !== string) {
             switch (cmd.name) {
                 case 'cat':
                 case 'rm':
                 case 'less':
-                    return await processAssets((content: ListDir) => {
-                        return prepend(trailing(content.dirs).concat(content.files));
-                    });
+                    return await bash.completion(string, Completion.File);
                 case 'ls':
                 case 'cd':
-                    return await processAssets((content: ListDir) => {
-                        return prepend(trailing(content.dirs));
-                    });
+                    return await bash.completion(string, Completion.Directory);
             }
         }
         return command_list;
@@ -467,13 +200,13 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         stderr,
         stdin,
         fs,
-        cwd: default_dir
+        home:  '/'
     });
 
     term.set_prompt(() => {
-        const cwd = bash.cwd();
+        const cwd = bash.cwd;
         const path = cwd === '/' ? '~' : cwd.replace(default_dir, '~/');
-        return `<DodgerBlue>${path}</DodgerBlue>:&gt; `;
+        return color('blue', path) + ':&gt; ';
     });
 
     // -------------------------------------------------------------------------

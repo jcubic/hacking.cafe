@@ -1,0 +1,161 @@
+import parse_options from '@jcubic/lily';
+import path from 'path-browserify';
+
+import type { BashContext } from './types';
+
+import { char, make_directory, rmdir, list_dir, color } from './utils';
+
+// -----------------------------------------------------------------------------
+export function echo(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, {
+        boolean: ['e', 'n']
+    } as any);
+    let output = options._.join(' ');
+    if (options.e) {
+        const re = /\\([\\ntb]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
+        output = output.replace(re, (_, str) => {
+            switch (str[0]) {
+                case '\\':
+                    return '\\';
+                case 'n':
+                    return '\n';
+                case 'b':
+                    return '\b';
+                case 't':
+                    return '\t';
+                case '0':
+                    return char(parseInt(str.substring(1), 8));
+                case 'x':
+                    return char(parseInt(str.substring(1), 16));
+            }
+            return '';
+        });
+    }
+    if (options.n) {
+        this.stdout.write(output);
+    } else {
+        this.stdout.writeln(output);
+    }
+}
+
+// -----------------------------------------------------------------------------
+export async function grep(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, {
+        boolean: ['i', 'v']
+    });
+    let [pattern, ...files] = options._;
+    let content;
+    if (!files.length) {
+        content = await this.stdin.read();
+    } else {
+        const fullname = path.resolve(this.cwd, files[0]);
+        content = await this.fs.readFile(fullname, 'utf8');
+    }
+    if (options.F) {
+        pattern = RegExp.escape(pattern);
+    }
+    const re = new RegExp(pattern, options.i ? 'i' : '');
+    const lines = content.split('\n');
+    for (const line of lines) {
+        const match = line.match(re);
+        if ((options.v && !match) || (!options.v && match)) {
+            this.stdout.writeln(line);
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+export async function rm(this: BashContext, ...args: string[]) {
+    const options = parse_options(args);
+    try {
+        for (const file of args) {
+            const pathname = path.resolve(this.cwd, file);
+            const stat = await this.fs.stat(pathname);
+            if (stat.isDirectory()) {
+                if (options.r) {
+                    rmdir(this.fs, pathname);
+                } else {
+                    this.stderr.writeln(`${file} is a directory`);
+                }
+            } else {
+                this.fs.unlink(pathname);
+            }
+        }
+    } catch(e) {
+        this.stderr.writeln((e as Error).message);
+    }
+}
+
+// -----------------------------------------------------------------------------
+export async function cd(this: BashContext, dir?: string) {
+    if (dir) {
+        const dirname = path.resolve(this.cwd, dir);
+        try {
+            const stat = await this.fs.stat(dirname);
+            if (stat.isFile()) {
+                this.stderr.writeln(`"${dirname}" is not directory`);
+            } else {
+                this.cwd = dirname == '/' ? dirname : dirname.replace(/\/$/, '');
+            }
+        } catch (e: any) {
+            this.stderr.writeln("Directory don't exits");
+        }
+    } else {
+        this.cwd = this.home;
+    }
+}
+
+// -----------------------------------------------------------------------------
+export async function cat(this: BashContext, ...args: string[]) {
+    let content;
+    if (args.length === 0) {
+        content = await this.stdin.read();
+    } else {
+        const files = [];
+        for (const name of args) {
+            const filename = path.resolve(this.cwd, name);
+            files.push(await this.fs.readFile(filename, 'utf8'));
+        }
+        content = files.join('');
+    }
+    this.stdout.write(content);
+}
+
+// -----------------------------------------------------------------------------
+export async function mkdir(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, {
+        boolean: ['a', 'A']
+    });
+    for (const dir of options._) {
+        const fullname = path.resolve(this.cwd, dir);
+        await make_directory(this.fs, fullname, !!options.p);
+    }
+}
+
+// ---------------------------------------------------------------------
+export function pwd(this: BashContext) {
+    this.stdout.writeln(this.cwd);
+}
+// ---------------------------------------------------------------------
+
+export async function ls(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, { boolean: ['a', 'A'] });
+    function filter(list: string[]) {
+        if (options.a) {
+            return list;
+        } else if (options.A) {
+            return list.filter(name => !name.match(/^\.{1,2}$/));
+        } else {
+            return list.filter(name => !name.match(/^\./));
+        }
+    }
+    const dir_path = path.resolve(this.cwd, options._[0] ?? '.');
+    const content = await list_dir(this.fs, dir_path);
+    const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => {
+        return color('blue', dir);
+    });
+    const result = dirs.concat(filter(content.files));
+    if (result.length) {
+        this.stdout.write(result.join('\n') + '\n');
+    }
+}

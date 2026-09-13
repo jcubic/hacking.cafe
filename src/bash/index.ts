@@ -1,8 +1,6 @@
 import { parse } from 'unbash';
 import path from 'path-browserify';
 
-export type PromisifiedFS = typeof import('fs/promises');
-
 import type {
     Statement,
     Command,
@@ -15,15 +13,29 @@ import type {
     Redirect
 } from 'unbash';
 
-type PromiseOrType<T> = T | PromiseLike<T>;
+import type {
+    Stdout,
+    Stdin,
+    PromisifiedFS,
+    Environment,
+    Commands,
+    BashCommand,
+    BashContext,
+    BashInterpreter,
+    ListDir
+} from './types';
 
-export interface Stdout {
-    output(): string;
-    flush(): void;
-    clear(): void;
-    write(str: string): void;
-    writeln(str: string): void;
-}
+import * as builtins from './commands';
+
+export { color } from './utils';
+
+import { Completion } from './types';
+
+export { Completion };
+
+export type { Stdout, Stdin, PromisifiedFS, Environment, Commands, BashContext, ListDir };
+
+import { complete_file, complete_directory } from './completion';
 
 export class BufferOutput implements Stdout {
     protected _buffer: string[];
@@ -55,10 +67,6 @@ class PipeOutput extends BufferOutput {
     }
 }
 
-export interface Stdin {
-    read(): TypeOrPromise<string>;
-}
-
 class PipeStdin implements Stdin {
     protected _buffer: string[];
     constructor(buffer: string[]) {
@@ -69,54 +77,49 @@ class PipeStdin implements Stdin {
     }
 }
 
-export type BashCommand = (this: BashContext, ...args: string[]) =>
-    PromiseOrType<void | number>;
-
-export type Commands = {
-    [key: string]: BashCommand;
-};
-
-export type Variable = string | string[] | {[key: string]: string};
-
-export type Environment = {
-    [key: string]: Variable | undefined;
-};
-
-export type BashContext = {
-    cwd: string;
-    fs: PromisifiedFS;
-    stdout: Stdout;
-    stderr: Stdout;
-    stdin: Stdin;
-};
-
-export class Bash {
+export class Bash implements BashInterpreter {
     private _commands: Commands;
     private _env: Environment;
     private _context: BashContext;
-    constructor(commands = {}, context: BashContext) {
-        this._commands = commands;
-        this._context = context;
+    constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
+        this._commands = {...builtins, ...commands}
+        this._context = { cwd: context.home, bash: this, ...context };
         this._env = Object.create(null);
     }
 
     // -------------------------------------------------------------------------
-    cwd() {
+    get cwd() {
         return this._context.cwd;
+    }
+    set cwd(dir: string) {
+        this._context.cwd = dir;
     }
 
     // -------------------------------------------------------------------------
-    command_exists(command: any): command is keyof Commands {
+    public completion(command: string, type: Completion): TypeOrPromise<string[]> {
+        switch (type) {
+            case Completion.File:
+                return complete_file(this._context, command);
+            case Completion.Directory:
+                return complete_directory(this._context, command);
+        }
+        return [];
+    }
+    // -------------------------------------------------------------------------
+    public command_exists(command: any): command is keyof Commands {
+        console.log({command});
+        console.log(this._commands[command]);
+        console.log(this._commands);
         return Object.hasOwn(this._commands, command);
     }
 
     // -------------------------------------------------------------------------
-    exec(command: string, ...args: string[]): ReturnType<BashCommand> {
+    public exec(command: string, ...args: string[]): ReturnType<BashCommand> {
         return this._commands[command].apply(this._context, args);
     }
 
     // -------------------------------------------------------------------------
-    variable(name: string) {
+    public variable(name: string) {
         if (Object.hasOwn(this._env, name)) {
             return this._env[name];
         }
@@ -124,7 +127,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    async evaluate(code: string) {
+    public async evaluate(code: string) {
         if (code.trim()) {
             const ast = parse(code);
 
@@ -135,7 +138,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    dispatch(ast: Node): TypeOrPromise<void> {
+    protected dispatch(ast: Node): TypeOrPromise<void> {
         const type = ast.type.toLowerCase();
         const bash = this as unknown as Record<string, unknown>;
         if (typeof bash[type] === 'function') {
@@ -146,7 +149,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    async redirect(ast: Redirect) {
+    protected async redirect(ast: Redirect) {
         if (ast.target) {
             switch (ast.operator) {
                 case '>': {
@@ -169,7 +172,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    resolve(ast: Word) {
+    protected resolve(ast: Word) {
         if (!ast.parts?.length) {
             return ast.value;
         }
@@ -178,7 +181,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    simple(ast: WordPart | DoubleQuotedChild) {
+    protected simple(ast: WordPart | DoubleQuotedChild) {
         switch (ast.type) {
             case 'DoubleQuoted':
                 return this.quote(ast);
@@ -205,7 +208,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    suffix(ast: Word[]) {
+    protected suffix(ast: Word[]) {
         const args = [];
         for (const suffix of ast) {
             args.push(this.resolve(suffix));
@@ -213,14 +216,15 @@ export class Bash {
         return args;
     }
 
-    quote(ast: DoubleQuotedPart): string {
+    // -------------------------------------------------------------------------
+    protected quote(ast: DoubleQuotedPart): string {
         return ast.parts.map(part => {
             return this.simple(part);
         }).join('');
     }
 
     // -------------------------------------------------------------------------
-    async pipeline(ast: Pipeline) {
+    protected async pipeline(ast: Pipeline) {
         const { stdin, stdout, stderr } = this._context;
         const commands = [...ast.commands];
         const output = new PipeOutput();
@@ -237,7 +241,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    async command(ast: Command, pipe = false) {
+    protected async command(ast: Command, pipe = false) {
         if (!ast.name) {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
@@ -268,7 +272,7 @@ export class Bash {
     }
 
     // -------------------------------------------------------------------------
-    statement(ast: Statement) {
+    protected statement(ast: Statement) {
         return this.dispatch(ast.command);
     }
 }
