@@ -1,5 +1,5 @@
 node_modules
 dist
 api/vendor/
-api/fs.db
+api/*.db
 api/.env

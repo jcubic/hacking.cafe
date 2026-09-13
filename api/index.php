@@ -22,6 +22,7 @@
  */
 
 require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/cache.php';
 
 use Jcubic\JsonRpc\Server;
 
@@ -35,14 +36,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-class Service {
+class Service extends RequestCache {
     private PDO $fs_db;
 
     function __construct() {
-        $this->fs_db = new PDO('sqlite:' . __DIR__ . '/fs.db');
+        parent::__construct(array(
+            'CACHE_FILE' => 'cache.db',
+            'CACHE_TIME' => 48
+        ));
+        $fs = __DIR__ . '/fs.db';
+        $this->fs_db = new PDO('sqlite:' . $fs);
         $this->fs_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $this->fs_db->exec('CREATE TABLE IF NOT EXISTS fs(name TEXT PRIMARY KEY, data BLOB)');
+        if (!is_file($fs)) {
+            $this->fs_db->exec('CREATE TABLE IF NOT EXISTS fs(
+                                   name TEXT PRIMARY KEY,
+                                   data BLOB
+                               )');
+        }
     }
+
+    // ------------------------------------------------------------------------
     function jargon_list() {
         $db = new PDO('sqlite:jargon.db');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -57,7 +70,14 @@ class Service {
     }
 
     // ------------------------------------------------------------------------
-    public function get($url) {
+    public function get($url, $cache = false) {
+        if ($cache) {
+            $result = $this->fetch($url);
+            if ($result->code == 200) {
+                return $result->body;
+            }
+            return NULL;
+        }
         $ch = $this->curl($url);
         $result = curl_exec($ch);
         $info = curl_getinfo($ch);
@@ -90,7 +110,8 @@ class Service {
         $env = parse_ini_file('.env');
         $api_key = $env['GEO_IP_API_KEY'];
         $ip = $this->ip();
-        return json_decode($this->get("https://api.ip2location.io/?key=$api_key&&ip=$ip"));
+        $url = "https://api.ip2location.io/?key=$api_key&&ip=$ip";
+        return json_decode($this->get($url, true));
     }
 
     // ------------------------------------------------------------------------
