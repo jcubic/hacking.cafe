@@ -20,6 +20,7 @@
 import rpc from '@jcubic/json-rpc';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import path from 'path-browserify';
+import { z } from 'zod';
 
 import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
@@ -41,6 +42,22 @@ const delay = 80;
 const DEBUG = DEV;
 
 const rpc_url = DEV ? 'http://localhost:8810/' : '/api/';
+
+// shape of the object returned by the service.location() JSON-RPC method
+const LocationSchema = z.object({
+    ip: z.string(),
+    country_code: z.string(),
+    country_name: z.string(),
+    region_name: z.string(),
+    city_name: z.string(),
+    latitude: z.number(),
+    longitude: z.number(),
+    zip_code: z.string(),
+    time_zone: z.string(),
+    asn: z.string(),
+    as: z.string(),
+    is_proxy: z.boolean()
+});
 
 class BufferTerminalOutput extends BufferOutput {
     protected _term: JQueryTerminal;
@@ -120,15 +137,13 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             const cols = term.cols();
             const narrow_view = cols <= 65;
             const logo = neofetch.innerHTML;
-            const lang = (new Intl.NumberFormat()).resolvedOptions().locale;
             const lines = logo.split('\n');
             const gap = 3;
             const logo_width = $.terminal.length(lines[0]);
             const space = cols - logo_width - gap - 2;
             const server = `${user}@hacking.cafe`;
             const battery = await (navigator as any).getBattery();
-            const user_data = await service.location();
-
+            const user_data = LocationSchema.parse(await service.location());
             // @ts-expect-error
             const battery_status = [
                 battery.level * 100,
@@ -137,21 +152,30 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             ].join('');
 
             const dark_mode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const {
+                Resolution,
+                Browser,
+                RAM,
+                CPU,
+                GPU,
+                Timezone,
+                Language
+            } = system_details();
+
             const meta = {
-                Langauge: lang,
-                OS: navigator.userAgentData.platform,
-                RAM: `${navigator.deviceMemory}GB`,
-                CPU: `${navigator.hardwareConcurrency} threads`,
-                GPU: gpu().renderer,
+                Browser,
+                RAM,
+                CPU,
+                GPU,
                 'User-Agent': navigator.userAgent,
-                Resolution: `${screen.width}x${screen.height}`,
+                Resolution,
                 'Dark Mode': `${dark_mode ? 'enabled' : 'disabled'}`,
                 IP: user_data.ip,
                 Terminal: `jQuery Terminal ${$.terminal.version}`,
                 Location: `${user_data.city_name}, ${user_data.country_name}`,
                 ISP: user_data.as,
-                Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                Language: navigator.language,
+                Timezone,
+                Language
                 //'Battery': battery_status
             } as const;
             const info = [
@@ -353,8 +377,8 @@ function display_rfc(rfc: string) {
 }
 
 function gpu() {
-    const canvas = document.getElementById('gl_canvas');
-    const gl = canvas.getContext('experimental-webgl');
+    const canvas = document.getElementById('gl_canvas') as HTMLCanvasElement;
+    const gl = canvas.getContext('experimental-webgl') as WebGLRenderingContext;
 
     let unMaskedInfo = {
         renderer: '',
@@ -368,4 +392,21 @@ function gpu() {
     }
 
     return unMaskedInfo;
+}
+
+function system_details() {
+    // @ts-expect-error
+    const browser = navigator.userAgentData.brands.at(-1);
+    // @ts-expect-error
+    const os = navigator.userAgentData.platform
+    return {
+        Resolution: `${screen.width}x${screen.height}`,
+        Browser: `${browser.brand} ${browser.version} / ${os}`,
+        // @ts-expect-error
+        RAM: `${navigator.deviceMemory}GB`,
+        CPU: `${navigator.hardwareConcurrency} threads`,
+        GPU: gpu().renderer,
+        Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        Language: navigator.language
+    } as const;
 }
