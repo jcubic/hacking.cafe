@@ -126,6 +126,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             const space = cols - fetch_width - gap;
             const server = `${user}@hacking.cafe`;
             const battery = await (navigator as any).getBattery();
+            const user_data = await service.location();
             // @ts-expect-error
             const battery_status = [
                 battery.level * 100,
@@ -136,7 +137,8 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 Langauge: lang,
                 Terminal: `jQuery Terminal ${$.terminal.version}`,
                 'User-Agent': navigator.userAgent,
-                'IP': await service.ip(),
+                'IP': user_data.ip,
+                'Location': `${user_data.city_name}, ${user_data.country_name}`
                 //'Battery': battery_status
             } as const;
             const info = [
