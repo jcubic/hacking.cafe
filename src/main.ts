@@ -124,26 +124,28 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
             const gap = 3;
             const fetch_width = $.terminal.length(lines[0]);
             const space = cols - fetch_width - gap;
-            const rows = lines.length;
             const server = `${user}@hacking.cafe`;
-            const battery = await navigator.getBattery();
+            const battery = await (navigator as any).getBattery();
+            // @ts-expect-error
+            const battery_status = [
+                battery.level * 100,
+                '% ',
+                battery.charging ? '[AC Connected]' : '[Discharging]'
+            ].join('');
             const meta = {
                 Langauge: lang,
                 Terminal: `jQuery Terminal ${$.terminal.version}`,
                 'User-Agent': navigator.userAgent,
                 'IP': await service.ip(),
-                'Battery': [
-                    battery.level * 100,
-                    '% ',
-                    battery.charging ? '[AC Connected]' : '[Discharging]'
-                ].join('')
-            };
+                //'Battery': battery_status
+            } as const;
             const info = [
                 `<white>${server}</white>`,
                 '-'.repeat(server.length)
             ];
             for (const [key, value] of Object.entries(meta)) {
-                let formatted = `[[;white;]${$.terminal.escape_brackets(value)}]`;
+                const escape = $.terminal.escape_brackets(value as string);
+                let formatted = `[[;white;]${escape}]`;
                 const text = `[[;#F7DF1E;]${key}]: ${formatted}`;
                 const lines = $.terminal.split_equal(text, space);
                 info.push(...lines);
