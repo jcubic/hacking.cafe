@@ -377,8 +377,8 @@ function display_rfc(rfc: string) {
 }
 
 function gpu() {
-    const canvas = document.getElementById('gl_canvas') as HTMLCanvasElement;
-    const gl = canvas.getContext('experimental-webgl') as WebGLRenderingContext;
+    const offscreen = new OffscreenCanvas(256, 256);
+    const gl = offscreen.getContext('webgl') as WebGLRenderingContext;
 
     let unMaskedInfo = {
         renderer: '',
