@@ -97,11 +97,12 @@ class Input implements Stdin {
     }
 }
 
-const intepreter = rpc({ url: rpc_url }).then(service => {
+const intepreter = rpc({ url: rpc_url }).then((service) => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;
 
-    const user = 'kuba';
+    const user = 'guest';
+    const home = `/home/${user}/`;
 
     const commands = {
         async hello(name: string) {
@@ -307,13 +308,22 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         stderr,
         stdin,
         fs,
-        home:  '/'
+        home
+    });
+
+    fs.stat(home).catch(() => {
+        bash.exec('mkdir', '-p', home);
     });
 
     term.set_prompt(() => {
         const cwd = bash.cwd;
-        const path = cwd === '/' ? '~' : cwd.replace(bash.home, '~/');
-        return color('blue', path) + ':&gt; ';
+        const path = cwd === bash.home ? '~' : cwd.replace(bash.home, '~/');
+        return [
+            color('green', `${user}@hacking.cafe`),
+            ':',
+            color('blue', path),
+            '$ '
+        ].join('');
     });
 
     // -------------------------------------------------------------------------
