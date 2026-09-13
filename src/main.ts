@@ -118,13 +118,13 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         // ---------------------------------------------------------------------
         async fetch(this: BashContext) {
             const cols = term.cols();
-            const wide_view = cols <= 65;
+            const narrow_view = cols <= 65;
             const logo = neofetch.innerHTML;
             const lang = (new Intl.NumberFormat()).resolvedOptions().locale;
             const lines = logo.split('\n');
             const gap = 3;
             const logo_width = $.terminal.length(lines[0]);
-            const space = cols - logo_width - gap;
+            const space = cols - logo_width - gap - 2;
             const server = `${user}@hacking.cafe`;
             const battery = await (navigator as any).getBattery();
             const user_data = await service.location();
@@ -162,15 +162,15 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 const escape = $.terminal.escape_brackets(value as string);
                 let formatted = `[[;white;]${escape}]`;
                 const text = `[[;#F7DF1E;]${key}]: ${formatted}`;
-                if (wide_view) {
+                if (narrow_view) {
+                    info.push(text);
+                } else {
                     const lines = $.terminal.split_equal(text, space);
                     info.push(...lines);
-                } else {
-                    info.push(text);
                 }
             }
             let result;
-            if (!wide_view) {
+            if (narrow_view) {
                 result = lines.concat([''], info).join('\n');
             } else {
                 result = lines.map((line, index) => {
