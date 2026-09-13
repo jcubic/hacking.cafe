@@ -131,9 +131,6 @@ export class Bash implements BashInterpreter {
     }
     // -------------------------------------------------------------------------
     public command_exists(command: any): command is keyof Commands {
-        console.log({command});
-        console.log(this._commands[command]);
-        console.log(this._commands);
         return Object.hasOwn(this._commands, command);
     }
 
