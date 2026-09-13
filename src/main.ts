@@ -153,21 +153,22 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
             const dark_mode = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const {
-                Resolution,
+                OS,
                 Browser,
                 RAM,
                 CPU,
                 GPU,
+                Resolution,
                 Timezone,
                 Language
             } = system_details();
 
             const meta = {
+                OS,
                 Browser,
                 RAM,
                 CPU,
                 GPU,
-                'User-Agent': navigator.userAgent,
                 Resolution,
                 'Dark Mode': `${dark_mode ? 'enabled' : 'disabled'}`,
                 IP: user_data.ip,
@@ -397,11 +398,11 @@ function gpu() {
 function system_details() {
     // @ts-expect-error
     const browser = navigator.userAgentData.brands.at(-1);
-    // @ts-expect-error
-    const os = navigator.userAgentData.platform
     return {
         Resolution: `${screen.width}x${screen.height}`,
-        Browser: `${browser.brand} ${browser.version} / ${os}`,
+        Browser: `${browser.brand} ${browser.version}`,
+        // @ts-expect-error
+        OS: navigator.userAgentData.platform,
         // @ts-expect-error
         RAM: `${navigator.deviceMemory}GB`,
         CPU: `${navigator.hardwareConcurrency} threads`,
