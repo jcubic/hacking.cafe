@@ -65,9 +65,6 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;
 
-    // TODO default should be ~
-    const default_dir = '/';
-
     const commands = {
         async hello(name: string) {
             await service.hello(name);
@@ -205,7 +202,7 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
 
     term.set_prompt(() => {
         const cwd = bash.cwd;
-        const path = cwd === '/' ? '~' : cwd.replace(default_dir, '~/');
+        const path = cwd === '/' ? '~' : cwd.replace(bash.home, '~/');
         return color('blue', path) + ':&gt; ';
     });
 

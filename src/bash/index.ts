@@ -88,6 +88,11 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    get home() {
+        return this._context.home;
+    }
+
+    // -------------------------------------------------------------------------
     get cwd() {
         return this._context.cwd;
     }

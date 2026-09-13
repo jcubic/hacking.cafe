@@ -45,6 +45,7 @@ export type ListDir = {
 };
 
 export interface BashInterpreter {
+    get home(): string;
     get cwd(): string;
     set cwd(dir: string);
     evaluate(code: string): TypeOrPromise<void>;
