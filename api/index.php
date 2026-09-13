@@ -70,23 +70,12 @@ class Service extends RequestCache {
     }
 
     // ------------------------------------------------------------------------
-    public function get($url, $cache = false) {
-        if ($cache) {
-            $result = $this->fetch($url);
-            if ($result->code == 200) {
-                return $result->body;
-            }
-            return NULL;
+    public function get($url, $use_cache = false) {
+        $result = $this->fetch($url, $use_cache);
+        if ($result->code == 200) {
+            return $result->body;
         }
-        $ch = $this->curl($url);
-        $result = curl_exec($ch);
-        $info = curl_getinfo($ch);
-        curl_close($ch);
-        if ($info['http_code'] == 200) {
-            return $result;
-        } else {
-            return NULL;
-        }
+        return NULL;
     }
 
     // ------------------------------------------------------------------------
@@ -112,23 +101,6 @@ class Service extends RequestCache {
         $ip = $this->ip();
         $url = "https://api.ip2location.io/?key=$api_key&&ip=$ip";
         return json_decode($this->get($url, true));
-    }
-
-    // ------------------------------------------------------------------------
-    private function curl($url) {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-        curl_setopt($ch, CURLOPT_HEADER, 0);
-        if (isset($_SERVER['HTTP_USER_AGENT'])) {
-            $agent = $_SERVER['HTTP_USER_AGENT'];
-        } else {
-            // defaut FireFox 15 from agent switcher (google chrome extension)
-            $agent = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20120427 '.
-                     'Firefox/15.0a1';
-        }
-        curl_setopt($ch, CURLOPT_USERAGENT, $agent);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        return $ch;
     }
 
     // ------------------------------------------------------------------------

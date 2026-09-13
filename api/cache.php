@@ -40,7 +40,10 @@ class RequestCache {
     }
 
     // ------------------------------------------------------------------------
-    public function fetch($url) {
+    public function fetch($url, $use_cache = true) {
+        if (!$use_cache) {
+            return $this->curl($url);
+        }
         $cache = $this->cache($url);
         if (count($cache)) {
             return (object)[
@@ -51,7 +54,6 @@ class RequestCache {
         $response = $this->curl($url);
         $this->store($url, $response);
         return $response;
-
     }
 
     // ------------------------------------------------------------------------
@@ -85,6 +87,14 @@ class RequestCache {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_SSH_COMPRESSION, true);
+        if (isset($_SERVER['HTTP_USER_AGENT'])) {
+            $agent = $_SERVER['HTTP_USER_AGENT'];
+        } else {
+            // defaut FireFox 15 from agent switcher (google chrome extension)
+            $agent = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20120427 '.
+                     'Firefox/15.0a1';
+        }
+        curl_setopt($ch, CURLOPT_USERAGENT, $agent);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_URL => $url
