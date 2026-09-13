@@ -118,27 +118,40 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
         // ---------------------------------------------------------------------
         async fetch(this: BashContext) {
             const cols = term.cols();
-            const fetch = neofetch.innerHTML;
+            const wide_view = cols <= 65;
+            const logo = neofetch.innerHTML;
             const lang = (new Intl.NumberFormat()).resolvedOptions().locale;
-            const lines = fetch.split('\n');
+            const lines = logo.split('\n');
             const gap = 3;
-            const fetch_width = $.terminal.length(lines[0]);
-            const space = cols - fetch_width - gap;
+            const logo_width = $.terminal.length(lines[0]);
+            const space = cols - logo_width - gap;
             const server = `${user}@hacking.cafe`;
             const battery = await (navigator as any).getBattery();
             const user_data = await service.location();
+
             // @ts-expect-error
             const battery_status = [
                 battery.level * 100,
                 '% ',
                 battery.charging ? '[AC Connected]' : '[Discharging]'
             ].join('');
+
+            const dark_mode = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const meta = {
                 Langauge: lang,
-                Terminal: `jQuery Terminal ${$.terminal.version}`,
+                OS: navigator.userAgentData.platform,
+                RAM: `${navigator.deviceMemory}GB`,
+                CPU: `${navigator.hardwareConcurrency} threads`,
+                GPU: gpu().renderer,
                 'User-Agent': navigator.userAgent,
-                'IP': user_data.ip,
-                'Location': `${user_data.city_name}, ${user_data.country_name}`
+                Resolution: `${screen.width}x${screen.height}`,
+                'Dark Mode': `${dark_mode ? 'enabled' : 'disabled'}`,
+                IP: user_data.ip,
+                Terminal: `jQuery Terminal ${$.terminal.version}`,
+                Location: `${user_data.city_name}, ${user_data.country_name}`,
+                ISP: user_data.as,
+                Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                Language: navigator.language,
                 //'Battery': battery_status
             } as const;
             const info = [
@@ -149,15 +162,25 @@ const intepreter = rpc({ url: rpc_url }).then(service => {
                 const escape = $.terminal.escape_brackets(value as string);
                 let formatted = `[[;white;]${escape}]`;
                 const text = `[[;#F7DF1E;]${key}]: ${formatted}`;
-                const lines = $.terminal.split_equal(text, space);
-                info.push(...lines);
-            }
-            this.stdout.writeln(lines.map((line, index) => {
-                if (info[index]) {
-                    return line + '   ' + info[index];
+                if (wide_view) {
+                    const lines = $.terminal.split_equal(text, space);
+                    info.push(...lines);
+                } else {
+                    info.push(text);
                 }
-                return line;
-            }).join('\n'));
+            }
+            let result;
+            if (!wide_view) {
+                result = lines.concat([''], info).join('\n');
+            } else {
+                result = lines.map((line, index) => {
+                    if (info[index]) {
+                        return line + '   ' + info[index];
+                    }
+                    return line;
+                }).join('\n');
+            }
+            this.stdout.writeln(result);
         },
         // ---------------------------------------------------------------------
         async rfc(this: BashContext, ...args: string[]) {
@@ -327,4 +350,22 @@ function display_rfc(rfc: string) {
     rfc = rfc.replace(/</g, '&lt;');
     rfc = rfc.replace(/>/g, '&gt;');
     term.less(rfc);
+}
+
+function gpu() {
+    const canvas = document.getElementById('gl_canvas');
+    const gl = canvas.getContext('experimental-webgl');
+
+    let unMaskedInfo = {
+        renderer: '',
+        vendor: ''
+    };
+
+    const dbgRenderInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbgRenderInfo != null) {
+        unMaskedInfo.renderer = gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL);
+        unMaskedInfo.vendor = gl.getParameter(dbgRenderInfo.UNMASKED_VENDOR_WEBGL);
+    }
+
+    return unMaskedInfo;
 }
