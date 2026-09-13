@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently -n client,api -c blue,yellow \"npm:dev:client\" \"npm:dev:api\"",
     "dev:client": "vite",
-    "dev:api": "php -S localhost:8810 -t api api/index.php",
+    "dev:api": "php -S localhost:8810 -t api",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

@@ -39,6 +39,14 @@ export default defineConfig({
                     dest: '.'
                 },
                 {
+                    src: 'api/fs.php',
+                    dest: '.'
+                },
+                {
+                    src: 'api/fs/*.php',
+                    dest: '.'
+                },
+                {
                     src: 'api/vendor/**',
                     dest: '.'
                 }
