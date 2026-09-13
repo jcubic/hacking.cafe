@@ -145,7 +145,7 @@ export async function cat(this: BashContext, ...args: string[]) {
 // -----------------------------------------------------------------------------
 export async function mkdir(this: BashContext, ...args: string[]) {
     const options = parse_options(args, {
-        boolean: ['a', 'A']
+        boolean: ['a', 'A', 'p']
     });
     for (const dir of options._) {
         const fullname = path.resolve(this.cwd, dir);
