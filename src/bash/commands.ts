@@ -87,7 +87,7 @@ export async function grep(this: BashContext, ...args: string[]) {
 
 // -----------------------------------------------------------------------------
 export async function rm(this: BashContext, ...args: string[]) {
-    const options = parse_options(args, { boolean: 'r' });
+    const options = parse_options(args, { boolean: ['r'] });
     try {
         for (const file of options._) {
             const pathname = path.resolve(this.cwd, file);
