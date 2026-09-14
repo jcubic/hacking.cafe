@@ -46,6 +46,8 @@ import type {
 
 import * as builtins from './commands';
 
+import { date, char } from './utils';
+
 export { color } from './utils';
 
 import { Completion } from './types';
@@ -106,9 +108,44 @@ export class Bash implements BashInterpreter {
         this._env = Object.create(null);
     }
 
+    private async content(pathname: string) {
+        try {
+            return await this.fs.readFile(pathname, 'utf8');
+        } catch(e) {
+            return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    public async init() {
+        const home = await this.content(`/home/${this.user}/.bashrc`);
+        const etc = await this.content('/etc/bashrc');
+        if (etc) {
+            await this.evaluate(etc);
+        }
+        if (home) {
+            await this.evaluate(home);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    get host() {
+        return this._context.host;
+    }
+
+    // -------------------------------------------------------------------------
+    get user() {
+        return this._context.user;
+    }
+
     // -------------------------------------------------------------------------
     get home() {
         return this._context.home;
+    }
+
+    // -------------------------------------------------------------------------
+    get fs() {
+        return this._context.fs;
     }
 
     // -------------------------------------------------------------------------
@@ -152,10 +189,53 @@ export class Bash implements BashInterpreter {
         if (code.trim()) {
             const ast = parse(code);
 
+            let result;
             for (const command of ast.commands) {
-                await this.dispatch(command);
+                result = await this.dispatch(command);
             }
+            return result;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // example Ubuntu prompts:
+    // simple: PS1="\u@\h:\w\$ "
+    // color: PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+    // -------------------------------------------------------------------------
+    prompt() {
+        const prompt = this.variable('$PS1');
+        if (typeof prompt !== 'string') {
+            return '';
+        }
+        return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
+            if (seq.match(/^[0-7]+$/)) {
+                return char(parseInt(seq, 8));
+            }
+            switch (seq[0]) {
+                case '\\':
+                    return '\\';
+                case '[':
+                case ']':
+                    return '';
+                case 'e':
+                    return char(0x1b);
+                case 'd':
+                    return date();
+                case 'h':
+                    return this.host;
+                case 'w':
+                    return this.cwd.replace(this.home, '~');
+                case 'W':
+                    if (this.cwd === this.home) {
+                        return '~';
+                    } else {
+                        return path.basename(this.cwd);
+                    }
+                case 'u':
+                    return this.user;
+            }
+            return seq;
+        }) + ' ';
     }
 
     // -------------------------------------------------------------------------
@@ -220,7 +300,7 @@ export class Bash implements BashInterpreter {
                 if (ast.operator) {
                     throw new Error(`Unkown Bash substitution ${ast.text}`);
                 }
-                return this.variable(ast.parameter);
+                return this.variable('$' + ast.parameter);
             }
             case 'CommandExpansion':
             case 'ArithmeticExpansion':

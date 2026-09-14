@@ -51,6 +51,8 @@ export type Environment = {
 export type BashContext = {
     cwd: string;
     home: string;
+    user: string;
+    host: string;
     bash: BashInterpreter;
     fs: PromisifiedFS;
     stdout: Stdout;
@@ -65,8 +67,12 @@ export type ListDir = {
 
 export interface BashInterpreter {
     get home(): string;
+    get user(): string;
+    get host(): string;
     get cwd(): string;
     set cwd(dir: string);
+    init(): Promise<void>;
+    prompt(string: string): string;
     evaluate(code: string): TypeOrPromise<void>;
     command_exists(command: any): command is keyof Commands;
     exec(command: string, ...args: string[]): ReturnType<BashCommand>;

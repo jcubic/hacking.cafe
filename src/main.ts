@@ -28,7 +28,6 @@ import { RPCBackend } from './fs';
 
 import {
     Bash,
-    color,
     BufferOutput,
     Stdin,
     PromisifiedFS,
@@ -97,12 +96,13 @@ class Input implements Stdin {
     }
 }
 
-const intepreter = rpc({ url: rpc_url }).then((service) => {
+const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;
 
     const user = 'guest';
     const home = `/home/${user}`;
+    const host = 'hacking.cafe';
 
     const commands = {
         async hello(name: string) {
@@ -308,6 +308,8 @@ const intepreter = rpc({ url: rpc_url }).then((service) => {
         stderr,
         stdin,
         fs,
+        user,
+        host,
         home
     });
 
@@ -315,19 +317,24 @@ const intepreter = rpc({ url: rpc_url }).then((service) => {
     (window as any).term = term;
     (term as any).fs = fs;
 
-    fs.stat(home).catch(() => {
-        bash.exec('mkdir', '-p', home);
+    // init home directory if not exists
+    await fs.stat(home).catch(async () => {
+        await bash.exec('mkdir', '-p', home);
+        const bashrc = [
+            String.raw`PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$"`,
+            ''
+        ].join('\n');
+        await fs.writeFile(`${home}/.bashrc`, bashrc);
     });
 
+    await bash.init();
+
     term.set_prompt(() => {
-        const cwd = bash.cwd;
-        const path = cwd.replace(bash.home, '~');
-        return [
-            color('green', `${user}@hacking.cafe`),
-            ':',
-            color('blue', path),
-            '$ '
-        ].join('');
+        try {
+            return bash.prompt() || ' ';
+        } catch (e) {
+            return '$ ';
+        }
     });
 
     // -------------------------------------------------------------------------

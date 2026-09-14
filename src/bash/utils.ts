@@ -21,8 +21,18 @@ import path from 'path-browserify';
 
 import type { ListDir, PromisifiedFS } from './types';
 
+// -----------------------------------------------------------------------------
 export function char(int: number) {
     return String.fromCharCode(int);
+}
+
+// -----------------------------------------------------------------------------
+export function date() {
+    return new Date().toLocaleString('en', {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+    });
 }
 
 // -----------------------------------------------------------------------------
