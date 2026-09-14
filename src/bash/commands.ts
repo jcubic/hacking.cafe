@@ -1,4 +1,6 @@
 /*
+ *  Bash builtins, some of them on Linux/Unix are normal programs
+ *
  *  Copyright (c) 2026 Jakub T. Jankiewicz <https://jakub.jankiewicz.org>
  *
  *  This file is part of Hacking Cafe.

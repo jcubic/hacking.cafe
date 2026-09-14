@@ -1,4 +1,6 @@
 /*
+ *  Export types and main Bash class
+ *
  *  Copyright (c) 2026 Jakub T. Jankiewicz <https://jakub.jankiewicz.org>
  *
  *  This file is part of Hacking Cafe.
@@ -59,6 +61,11 @@ export type { Stdout, Stdin, PromisifiedFS, Environment, Commands, BashContext, 
 
 import { complete_file, complete_directory } from './completion';
 
+/*
+ * We need to use buffers in order to redirect them with pipes.
+ * the command write to stdout when no pipes or last in pipe
+ * the buffer are flushed.
+ */
 export class BufferOutput implements Stdout {
     protected _buffer: string[];
     constructor(buffer = []) {
@@ -83,12 +90,20 @@ export class BufferOutput implements Stdout {
     }
 }
 
+/*
+ * PipeOutput exposes internal buffer so it can be passed
+ * to PipeStdin
+ */
 class PipeOutput extends BufferOutput {
     get buffer() {
         return this._buffer;
     }
 }
 
+/*
+ * PipeStdin accept buffer from stdout as constructor
+ * and return the content of that buffer when command reads the data
+ */
 class PipeStdin implements Stdin {
     protected _buffer: string[];
     constructor(buffer: string[]) {
@@ -99,6 +114,12 @@ class PipeStdin implements Stdin {
     }
 }
 
+/*
+ * Bash class is more like a Unix system
+ *
+ * TODO: separate bash parser from Unix like behavior
+ *
+ */
 export class Bash implements BashInterpreter {
     private _commands: Commands;
     private _env: Environment;

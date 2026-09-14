@@ -1,4 +1,6 @@
 /*
+ *  Helper utilities
+ *
  *  Copyright (c) 2026 Jakub T. Jankiewicz <https://jakub.jankiewicz.org>
  *
  *  This file is part of Hacking Cafe.
