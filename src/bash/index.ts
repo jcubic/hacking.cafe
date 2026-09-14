@@ -124,6 +124,9 @@ export class Bash implements BashInterpreter {
     private _commands: Commands;
     private _env: Environment;
     private _context: BashContext;
+    private  _aliases = {
+        '.': 'source'
+    } as const;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { cwd: context.home, bash: this, ...context };
@@ -235,6 +238,11 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     public command_exists(command: any): command is keyof Commands {
         return Object.hasOwn(this._commands, command);
+    }
+
+    // -------------------------------------------------------------------------
+    public alias_exists(command: any): command is keyof typeof this._aliases {
+        return Object.hasOwn(this._aliases, command);
     }
 
     // -------------------------------------------------------------------------
@@ -429,7 +437,10 @@ export class Bash implements BashInterpreter {
             }
             return;
         }
-        const command = this.resolve(ast.name);
+        let command = this.resolve(ast.name);
+        if (this.alias_exists(command)) {
+            command = this._aliases[command];
+        }
         const args = this.suffix(ast.suffix) as string[];
         if (this.command_exists(command)) {
             await this.exec(command, ...args);

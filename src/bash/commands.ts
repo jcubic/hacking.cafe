@@ -211,3 +211,12 @@ export async function adduser(this: BashContext, ...args: string[]) {
         this.stdout.writeln('Usage: useradd LOGIN');
     }
 }
+
+export async function source(this: BashContext, ...args: string[]) {
+    const options = parse_options(args);
+    if (options._.length === 1) {
+        const filename = path.resolve(this.cwd, options._[0]);
+        const file = await this.fs.readFile(filename, 'utf8');
+        this.bash.evaluate(file);
+    }
+}
