@@ -180,3 +180,32 @@ export async function ls(this: BashContext, ...args: string[]) {
         this.stdout.write(result.join('\n') + '\n');
     }
 }
+
+export async function adduser(this: BashContext, ...args: string[]) {
+    const options = parse_options(args);
+    if (options._.length === 1) {
+        const [ user ] = options._;
+        const home = `/home/${user}`;
+        try {
+            await this. fs.stat(home);
+            throw new Error(`User ${user} already exist`);
+        } catch(e) {
+            await this.bash.exec('mkdir', '-p', home);
+
+            const bashrc = [
+                String.raw`PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "`,
+                ''
+            ].join('\n');
+            await this.fs.writeFile(`${home}/.bashrc`, bashrc);
+
+            let users = await this.bash.users();
+            const passwd = users.map(user => user.text).concat([
+                `${user}:x:502:502:Guest User:/home/${user}:/bin/bash`,
+                ''
+            ]).join('\n');
+            await this.fs.writeFile('/etc/passwd', passwd);
+        }
+    } else {
+        this.stdout.writeln('Usage: useradd LOGIN');
+    }
+}

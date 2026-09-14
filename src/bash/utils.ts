@@ -68,17 +68,20 @@ export async function make_directory(fs: PromisifiedFS, dir: string, parent = fa
 export async function rmdir(fs: PromisifiedFS, dir: string) {
     const list = await fs.readdir(dir);
     for(const name of list) {
-        const filename = path.join(dir, name);
-        const stat = await fs.stat(filename);
-        if (!filename.match(/^\.{1,2}$/)) {
+        const pathname = path.join(dir, name);
+        const stat = await fs.stat(pathname);
+        if (!pathname.match(/^\.{1,2}$/)) {
             if(stat.isDirectory()) {
-                await rmdir(fs, filename);
+                await rmdir(fs, pathname);
             } else {
-                fs.unlink(filename);
+                await fs.unlink(pathname);
             }
         }
     }
-    await fs.rmdir(dir);
+    // you can delete root directory
+    if (dir !== '/') {
+        await fs.rmdir(dir);
+    }
 }
 
 // -----------------------------------------------------------------------------

@@ -41,7 +41,8 @@ import type {
     BashCommand,
     BashContext,
     BashInterpreter,
-    ListDir
+    ListDir,
+    UserData
 } from './types';
 
 import * as builtins from './commands';
@@ -108,11 +109,30 @@ export class Bash implements BashInterpreter {
         this._env = Object.create(null);
     }
 
+    // -------------------------------------------------------------------------
     private async content(pathname: string) {
         try {
             return await this.fs.readFile(pathname, 'utf8');
         } catch(e) {
             return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    public async setup() {
+        const users = await this.users();
+        if (users.length === 0) {
+            try {
+                await this.fs.stat('/etc');
+            } catch (e) {
+                await this.fs.mkdir('/etc');
+            }
+            await this.fs.writeFile('/etc/passwd', 'root:x:0:0:Super User:/root:/bin/bash\n');
+        }
+        try {
+            await this.fs.stat(this.home);
+        } catch(e) {
+            await this.exec('adduser', this.user);
         }
     }
 
@@ -126,6 +146,31 @@ export class Bash implements BashInterpreter {
         if (home) {
             await this.evaluate(home);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    public async users() {
+        let passwd = await this.content('/etc/passwd');
+        if (!passwd) {
+            return [];
+        }
+        const result: UserData[] = [];
+        for (const line of passwd.split('\n')) {
+            const parts = line.split(':');
+            if (parts.length === 7) {
+                result.push({
+                    username: parts[0],
+                    password: parts[1],
+                    uid: parseInt(parts[2]),
+                    gid: parseInt(parts[3]),
+                    fullname: parts[4],
+                    home: parts[5],
+                    shell: parts[6],
+                    text: line
+                } as const);
+            }
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------

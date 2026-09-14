@@ -65,6 +65,17 @@ export type ListDir = {
     dirs: string[]
 };
 
+export type UserData = {
+    username: string;
+    password: string;
+    uid: number;
+    gid: number;
+    fullname: string;
+    home: string;
+    shell: string;
+    text: string;
+}
+
 export interface BashInterpreter {
     get home(): string;
     get user(): string;
@@ -72,6 +83,8 @@ export interface BashInterpreter {
     get cwd(): string;
     set cwd(dir: string);
     init(): Promise<void>;
+    setup(): Promise<void>;
+    users(): Promise<UserData[]>;
     prompt(string: string): string;
     evaluate(code: string): TypeOrPromise<void>;
     command_exists(command: any): command is keyof Commands;
