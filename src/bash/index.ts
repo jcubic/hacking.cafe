@@ -235,7 +235,7 @@ export class Bash implements BashInterpreter {
                     return this.user;
             }
             return seq;
-        }) + ' ';
+        });
     }
 
     // -------------------------------------------------------------------------

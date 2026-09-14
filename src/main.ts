@@ -321,7 +321,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     await fs.stat(home).catch(async () => {
         await bash.exec('mkdir', '-p', home);
         const bashrc = [
-            String.raw`PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$"`,
+            String.raw`PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "`,
             ''
         ].join('\n');
         await fs.writeFile(`${home}/.bashrc`, bashrc);
