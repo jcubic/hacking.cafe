@@ -311,6 +311,10 @@ const intepreter = rpc({ url: rpc_url }).then((service) => {
         home
     });
 
+    // for debugging
+    (window as any).term = term;
+    (term as any).fs = fs;
+
     fs.stat(home).catch(() => {
         bash.exec('mkdir', '-p', home);
     });
