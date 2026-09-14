@@ -230,6 +230,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
         // ---------------------------------------------------------------------
         credits(this: BashContext) {
             const text = [
+                'author: [[!b;#fff;;;https://jakub.jankiewicz.org]Jakub T. Jankiewicz]',
                 '',
                 'Tools, libraries, and services used:',
                 '* [[!b;#fff;;;https://terminal.jcubic.pl/]jQuery Terminal]',
