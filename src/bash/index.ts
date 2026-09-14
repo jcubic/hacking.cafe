@@ -203,9 +203,15 @@ export class Bash implements BashInterpreter {
     // color: PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
     // -------------------------------------------------------------------------
     prompt() {
-        const prompt = this.variable('$PS1');
-        if (typeof prompt !== 'string') {
-            return '';
+        let prompt;
+        try {
+            prompt = this.variable('$PS1');
+        } catch (e) {
+            // ignore
+        } finally {
+            if (typeof prompt !== 'string') {
+                prompt = '\\$ ';
+            }
         }
         return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
             if (seq.match(/^[0-7]+$/)) {
@@ -214,6 +220,11 @@ export class Bash implements BashInterpreter {
             switch (seq[0]) {
                 case '\\':
                     return '\\';
+                case 's':
+                    return 'bash';
+                case '$':
+                    // # for root
+                    return '$';
                 case '[':
                 case ']':
                     return '';

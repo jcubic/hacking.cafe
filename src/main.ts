@@ -330,11 +330,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     await bash.init();
 
     term.set_prompt(() => {
-        try {
-            return bash.prompt() || ' ';
-        } catch (e) {
-            return '$ ';
-        }
+        return bash.prompt();
     });
 
     // -------------------------------------------------------------------------
