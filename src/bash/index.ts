@@ -263,6 +263,10 @@ export class Bash implements BashInterpreter {
         if (code.trim()) {
             const ast = parse(code);
 
+            if (ast.errors) {
+                throw new Error(ast.errors[0].message);
+            }
+
             let result;
             for (const command of ast.commands) {
                 result = await this.dispatch(command);
