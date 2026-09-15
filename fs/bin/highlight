@@ -8,14 +8,14 @@ const terminal = require('$.terminal');
 async function main(...args) {
     const options = await parse(args);
     let content;
+    if (!options.lang) {
+        await stderr.writeln('Usage: hightlight --lang <langauge> [FILE]');
+        return 1;
+    }
     if (options._.length === 0) {
         content = await stdin.read();
     } else {
         content = await fs.readFile(options._[0], 'utf8');
-    }
-    if (!options.lang) {
-        await stderr.writeln('Usage: hightlight --lang &lt;langauge&gt; [FILE]');
-        return 1;
     }
     await stdout.write(await terminal.prism(options.lang, content));
     return 0;
