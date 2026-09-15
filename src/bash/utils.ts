@@ -116,6 +116,7 @@ export async function list_dir(fs: PromisifiedFS, dir: string): Promise<ListDir>
     return { files, dirs };
 }
 
+// -----------------------------------------------------------------------------
 const COLORS = {
     blue:   '#55f',
     green:  '#4d4',
@@ -127,12 +128,15 @@ const COLORS = {
     'persian-green': '#0aa'
 } as const;
 
+// -----------------------------------------------------------------------------
 export type COLOR = keyof typeof COLORS;
 
+// -----------------------------------------------------------------------------
 function is_color(color: any): color is COLOR {
     return Object.hasOwn(COLORS, color);
 }
 
+// -----------------------------------------------------------------------------
 export function color(name: string, string: string) {
     if (is_color(name)) {
         return '[[;' + COLORS[name] + ';]' + string + ']';
@@ -141,6 +145,7 @@ export function color(name: string, string: string) {
     }
 }
 
+// -----------------------------------------------------------------------------
 // ref: https://stackoverflow.com/a/18650828/387194
 export function format_bytes(bytes: number, decimals = 2) {
     if (!+bytes) {
@@ -161,6 +166,7 @@ export function format_bytes(bytes: number, decimals = 2) {
     return `${value}${sizes[i]}`;
 }
 
+// -----------------------------------------------------------------------------
 const MASKS = {
     // User
     u: { r: 0o400, w: 0o200, x: 0o100 },
@@ -170,6 +176,7 @@ const MASKS = {
     o: { r: 0o004, w: 0o002, x: 0o001 }
 };
 
+// -----------------------------------------------------------------------------
 export function mode_to_string(mode: number) {
     const perms = mode & 0o777;
 
@@ -199,6 +206,7 @@ export function mode_to_string(mode: number) {
     ].join('');
 }
 
+// -----------------------------------------------------------------------------
 export function file_date(timestamp: number) {
     const date = new Date(timestamp);
     const locale = (new Intl.NumberFormat()).resolvedOptions().locale;
@@ -207,4 +215,45 @@ export function file_date(timestamp: number) {
     const hour = date.getHours().toString().padStart(2, '0');
     const min = date.getMinutes().toString().padStart(2, '0');
     return `${mon} ${day} ${hour}:${min}`;
+}
+
+// -----------------------------------------------------------------------------
+const permission_re = /^[ugoa][-+=][rwx](,[ugoa][-+=][rwx])*$/;
+
+// -----------------------------------------------------------------------------
+export function is_permission(arg: string) {
+    return str.match(permission_re);
+}
+
+// -----------------------------------------------------------------------------
+// bit value of each permission letter, and the shift for each class
+// of user it applies to within a Posix mode (eg. rwxrwxrwx)
+// -----------------------------------------------------------------------------
+const PERMISSION_BITS: Record<string, number> = { r: 4, w: 2, x: 1 };
+const CLASS_SHIFTS: Record<string, number> = { u: 6, g: 3, o: 0 };
+
+export function parse_mode(str: string, mode: number): number {
+    return str.split(',').reduce((mode, clause) => {
+        const match = clause.match(/^([ugoa])([-+=])([rwx])$/);
+        if (!match) {
+            return mode;
+        }
+        const [, who, op, perm] = match;
+        const classes = who === 'a' ? ['u', 'g', 'o'] : [who];
+        const bit_value = PERMISSION_BITS[perm];
+        return classes.reduce((mode, cls) => {
+            const shift = CLASS_SHIFTS[cls];
+            const bit = bit_value << shift;
+            if (op === '+') {
+                return mode | bit;
+            }
+            if (op === '-') {
+                return mode & ~bit;
+            }
+            // '=' sets this permission and clears the other two bits
+            // within the same class (eg. u=r also clears u's w and x)
+            const class_mask = 0b111 << shift;
+            return (mode & ~class_mask) | bit;
+        }, mode);
+    }, mode);
 }

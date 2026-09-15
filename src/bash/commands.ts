@@ -34,7 +34,9 @@ import {
     list_dir,
     mode_to_string,
     file_date,
-    format_bytes
+    format_bytes,
+    is_permission,
+    parse_mode
 } from './utils';
 
 // -----------------------------------------------------------------------------
@@ -247,6 +249,7 @@ export async function adduser(this: BashContext, ...args: string[]) {
     }
 }
 
+// -----------------------------------------------------------------------------
 export async function source(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (options._.length === 1) {
@@ -256,6 +259,7 @@ export async function source(this: BashContext, ...args: string[]) {
     }
 }
 
+// -----------------------------------------------------------------------------
 export async function chmod(this: BashContext, ...args: string[]) {
     const options = parse_options(args, { boolean: ['R'] });
     if (options._.length > 1) {
@@ -266,11 +270,11 @@ export async function chmod(this: BashContext, ...args: string[]) {
                 const filepath = this.bash.resolve_path(file);
                 await this.fs.chmod(filepath, mode);
             }
-        } else if (permission.match(permission_re)) {
+        } else if (is_permission(permission)) {
             for (const file of files) {
                 const filepath = this.bash.resolve_path(file);
                 const { mode } = await this.fs.stat(filepath);
-                await this.fs.chmod(filepath, parse_mod(permission, mode));
+                await this.fs.chmod(filepath, parse_mode(permission, mode));
             }
         }
     } else {
@@ -278,35 +282,3 @@ export async function chmod(this: BashContext, ...args: string[]) {
     }
 }
 
-const permission_re = /^[ugoa][-+=][rwx](,[ugoa][-+=][rwx])*$/;
-
-// bit value of each permission letter, and the shift for each class
-// of user it applies to within a Posix mode (eg. rwxrwxrwx)
-const PERMISSION_BITS: Record<string, number> = { r: 4, w: 2, x: 1 };
-const CLASS_SHIFTS: Record<string, number> = { u: 6, g: 3, o: 0 };
-
-function parse_mod(str: string, mode: number): number {
-    return str.split(',').reduce((mode, clause) => {
-        const match = clause.match(/^([ugoa])([-+=])([rwx])$/);
-        if (!match) {
-            return mode;
-        }
-        const [, who, op, perm] = match;
-        const classes = who === 'a' ? ['u', 'g', 'o'] : [who];
-        const bit_value = PERMISSION_BITS[perm];
-        return classes.reduce((mode, cls) => {
-            const shift = CLASS_SHIFTS[cls];
-            const bit = bit_value << shift;
-            if (op === '+') {
-                return mode | bit;
-            }
-            if (op === '-') {
-                return mode & ~bit;
-            }
-            // '=' sets this permission and clears the other two bits
-            // within the same class (eg. u=r also clears u's w and x)
-            const class_mask = 0b111 << shift;
-            return (mode & ~class_mask) | bit;
-        }, mode);
-    }, mode);
-}
