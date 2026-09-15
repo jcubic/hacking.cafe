@@ -4,7 +4,6 @@ const __modules__ = (() => {
     let rprc_id = 0;
 
     function call(namespace, args, method = null) {
-        console.log({ namespace, args, method });
         return new Promise((resolve, reject) => {
             const id = ++rprc_id;
             bs.addEventListener('message', function handler({data}) {
@@ -23,7 +22,6 @@ const __modules__ = (() => {
                 method,
                 args
             };
-            console.log({ payload });
             bs.postMessage(payload);
         });
     }
