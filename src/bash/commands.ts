@@ -20,7 +20,6 @@
  *
  */
 import parse_options from '@jcubic/lily';
-import path from 'path-browserify';
 
 import type { BashContext } from './types';
 
@@ -71,7 +70,7 @@ export async function grep(this: BashContext, ...args: string[]) {
     if (!files.length) {
         content = await this.stdin.read();
     } else {
-        const fullname = path.resolve(this.cwd, files[0]);
+        const fullname = this.bash.resolve_path(files[0]);
         content = await this.fs.readFile(fullname, 'utf8');
     }
     if (options.F) {
@@ -92,7 +91,7 @@ export async function rm(this: BashContext, ...args: string[]) {
     const options = parse_options(args, { boolean: ['r'] });
     try {
         for (const file of options._) {
-            const pathname = path.resolve(this.cwd, file);
+            const pathname = this.bash.resolve_path(file);
             const stat = await this.fs.stat(pathname);
             if (stat.isDirectory()) {
                 if (options.r) {
@@ -112,7 +111,7 @@ export async function rm(this: BashContext, ...args: string[]) {
 // -----------------------------------------------------------------------------
 export async function cd(this: BashContext, dir?: string) {
     if (dir) {
-        const dirname = path.resolve(this.cwd, dir);
+        const dirname = this.bash.resolve_path(dir);
         try {
             const stat = await this.fs.stat(dirname);
             if (stat.isFile()) {
@@ -136,7 +135,7 @@ export async function cat(this: BashContext, ...args: string[]) {
     } else {
         const files = [];
         for (const name of args) {
-            const filename = path.resolve(this.cwd, name);
+            const filename = this.bash.resolve_path(name);
             files.push(await this.fs.readFile(filename, 'utf8'));
         }
         content = files.join('');
@@ -150,7 +149,7 @@ export async function mkdir(this: BashContext, ...args: string[]) {
         boolean: ['a', 'A', 'p']
     });
     for (const dir of options._) {
-        const fullname = path.resolve(this.cwd, dir);
+        const fullname = this.bash.resolve_path(dir);
         await make_directory(this.fs, fullname, !!options.p);
     }
 }
@@ -172,7 +171,7 @@ export async function ls(this: BashContext, ...args: string[]) {
             return list.filter(name => !name.match(/^\./));
         }
     }
-    const dir_path = path.resolve(this.cwd, options._[0] ?? '.');
+    const dir_path = this.bash.resolve_path(options._[0] ?? '.');
     const content = await list_dir(this.fs, dir_path);
     const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => {
         return color('blue', dir);
@@ -215,7 +214,7 @@ export async function adduser(this: BashContext, ...args: string[]) {
 export async function source(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (options._.length === 1) {
-        const filename = path.resolve(this.cwd, options._[0]);
+        const filename = this.bash.resolve_path(options._[0]);
         const file = await this.fs.readFile(filename, 'utf8');
         this.bash.evaluate(file);
     }

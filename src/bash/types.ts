@@ -85,6 +85,7 @@ export interface BashInterpreter {
     init(): Promise<void>;
     setup(): Promise<void>;
     users(): Promise<UserData[]>;
+    resolve_path(path: string): string;
     prompt(string: string): string;
     evaluate(code: string): TypeOrPromise<void>;
     command_exists(command: any): command is keyof Commands;

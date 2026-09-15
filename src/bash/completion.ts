@@ -57,7 +57,7 @@ async function process_assets(bash: BashContext, command: string, callback: Proc
             return list;
         }
     }
-    var dir = get_path(bash.cwd, command);
+    var dir = get_path(bash.cwd, command.replace('~', bash.home));
     return prepend(callback(await list_dir(bash.fs, '/' + dir.join('/'))));
 }
 
