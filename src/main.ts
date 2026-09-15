@@ -92,7 +92,12 @@ class Input implements Stdin {
         this._term = term;
     }
     read() {
-        return this._term.read('');
+        const ret = this._term.read('');
+        // scripts are pausing the terminal when run
+        if (this._term.paused()) {
+            this._term.resume();
+        }
+        return ret;
     }
 }
 
