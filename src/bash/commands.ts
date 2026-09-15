@@ -21,9 +21,21 @@
  */
 import parse_options from '@jcubic/lily';
 
-import type { BashContext } from './types';
+import path from 'path-browserify';
 
-import { char, make_directory, rmdir, list_dir, color } from './utils';
+import { fs_constants } from './constants';
+
+import type { BashContext, Stats } from './types';
+
+import {
+    char,
+    make_directory,
+    rmdir,
+    list_dir,
+    mode_to_string,
+    file_date,
+    format_bytes
+} from './utils';
 
 // -----------------------------------------------------------------------------
 export function echo(this: BashContext, ...args: string[]) {
@@ -160,8 +172,18 @@ export function pwd(this: BashContext) {
 }
 
 // ---------------------------------------------------------------------
+function long_ls(context: BashContext, stat: Stats) {
+    console.log({ context, stat });
+    return [
+        mode_to_string(stat.mode),
+        format_bytes(stat.size).padStart(4, ' '),
+        file_date(stat.mtimeMs)
+    ].join(' ') + ' ';
+}
+
+// ---------------------------------------------------------------------
 export async function ls(this: BashContext, ...args: string[]) {
-    const options = parse_options(args, { boolean: ['a', 'A'] });
+    const options = parse_options(args, { boolean: ['a', 'A', 'l'] });
     function filter(list: string[]) {
         if (options.a) {
             return list;
@@ -173,10 +195,24 @@ export async function ls(this: BashContext, ...args: string[]) {
     }
     const dir_path = this.bash.resolve_path(options._[0] ?? '.');
     const content = await list_dir(this.fs, dir_path);
-    const dirs = filter(['.', '..'].concat(content.dirs)).map((dir: string) => {
-        return color('blue', dir);
-    });
-    const result = dirs.concat(filter(content.files));
+    let dirs = filter(['.', '..'].concat(content.dirs));
+    let result = dirs.concat(filter(content.files));
+    result = await Promise.all(result.map(async (name: string) => {
+        const fullname = path.join(dir_path, name);
+        const stat = await this.fs.stat(fullname);
+        const prefix = options.l ? long_ls(this, stat) : '';
+        if (stat.isDirectory()) {
+            return `${prefix}\x1b[01;34m${name}\x1b[m`;
+        }
+        const executable = fs_constants.S_IXUSR | fs_constants.S_IXGRP | fs_constants.S_IXOTH;
+        if ((stat.mode & executable) !== 0) {
+            return `${prefix}\x1b[01;32m${name}\x1b[m`;
+        }
+        if (name.endsWith('~')) {
+            return `${prefix}\x1b[00;90m${name}\x1b[m`;
+        }
+        return `${prefix}${name}`;
+    }));
     if (result.length) {
         this.stdout.write(result.join('\n') + '\n');
     }
@@ -218,4 +254,59 @@ export async function source(this: BashContext, ...args: string[]) {
         const file = await this.fs.readFile(filename, 'utf8');
         this.bash.evaluate(file);
     }
+}
+
+export async function chmod(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, { boolean: ['R'] });
+    if (options._.length > 1) {
+        const [ permission, ...files ] = options._;
+        if (permission.match(/^[0-7]+$/)) {
+            const mode = parseInt(permission, 8);
+            for (const file of files) {
+                const filepath = this.bash.resolve_path(file);
+                await this.fs.chmod(filepath, mode);
+            }
+        } else if (permission.match(permission_re)) {
+            for (const file of files) {
+                const filepath = this.bash.resolve_path(file);
+                const { mode } = await this.fs.stat(filepath);
+                await this.fs.chmod(filepath, parse_mod(permission, mode));
+            }
+        }
+    } else {
+        this.stdout.writeln('Usage: chmod mode files');
+    }
+}
+
+const permission_re = /^[ugoa][-+=][rwx](,[ugoa][-+=][rwx])*$/;
+
+// bit value of each permission letter, and the shift for each class
+// of user it applies to within a Posix mode (eg. rwxrwxrwx)
+const PERMISSION_BITS: Record<string, number> = { r: 4, w: 2, x: 1 };
+const CLASS_SHIFTS: Record<string, number> = { u: 6, g: 3, o: 0 };
+
+function parse_mod(str: string, mode: number): number {
+    return str.split(',').reduce((mode, clause) => {
+        const match = clause.match(/^([ugoa])([-+=])([rwx])$/);
+        if (!match) {
+            return mode;
+        }
+        const [, who, op, perm] = match;
+        const classes = who === 'a' ? ['u', 'g', 'o'] : [who];
+        const bit_value = PERMISSION_BITS[perm];
+        return classes.reduce((mode, cls) => {
+            const shift = CLASS_SHIFTS[cls];
+            const bit = bit_value << shift;
+            if (op === '+') {
+                return mode | bit;
+            }
+            if (op === '-') {
+                return mode & ~bit;
+            }
+            // '=' sets this permission and clears the other two bits
+            // within the same class (eg. u=r also clears u's w and x)
+            const class_mask = 0b111 << shift;
+            return (mode & ~class_mask) | bit;
+        }, mode);
+    }, mode);
 }

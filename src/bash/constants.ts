@@ -1,0 +1,29 @@
+export const fs_constants = {
+  S_IRUSR: 0o400,
+  S_IWUSR: 0o200,
+  S_IXUSR: 0o100,
+  S_IRWXU: 0o700,
+
+  S_IRGRP: 0o040,
+  S_IWGRP: 0o020,
+  S_IXGRP: 0o010,
+  S_IRWXG: 0o070,
+
+  S_IROTH: 0o004,
+  S_IWOTH: 0o002,
+  S_IXOTH: 0o001,
+  S_IRWXO: 0o007,
+
+  S_ISUID: 0o4000,
+  S_ISGID: 0o2000,
+  S_ISVTX: 0o1000,
+
+  S_IFMT: 0o170000,
+  S_IFREG: 0o100000,
+  S_IFDIR: 0o040000,
+  S_IFLNK: 0o120000,
+  S_IFCHR: 0o020000,
+  S_IFBLK: 0o060000,
+  S_IFIFO: 0o010000,
+  S_IFSOCK: 0o140000
+} as const;

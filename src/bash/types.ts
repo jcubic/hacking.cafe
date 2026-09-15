@@ -21,6 +21,8 @@ import type { PromisifiedFS } from '@isomorphic-git/lightning-fs';
 
 export type { PromisifiedFS };
 
+export type Stats = Awaited<ReturnType<PromisifiedFS['stat']>>;
+
 export type PromiseOrType<T> = T | PromiseLike<T>;
 
 export interface Stdout {

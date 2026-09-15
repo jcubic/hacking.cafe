@@ -24,7 +24,7 @@
     "vite-plugin-static-copy": "^4.1.1"
   },
   "dependencies": {
-    "@isomorphic-git/lightning-fs": "^4.7.0",
+    "@isomorphic-git/lightning-fs": "^4.8.0",
     "@jcubic/json-rpc": "^1.0.0",
     "@jcubic/lily": "^0.5.1",
     "jquery": "^3.7.1",

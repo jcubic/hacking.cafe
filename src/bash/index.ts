@@ -40,12 +40,13 @@ import type {
     PromisifiedFS,
     Environment,
     Commands,
-    BashCommand,
     BashContext,
     BashInterpreter,
     ListDir,
     UserData
 } from './types';
+
+import { fs_constants } from './constants';
 
 import * as builtins from './commands';
 
@@ -319,8 +320,21 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    public exec(command: string, ...args: string[]): ReturnType<BashCommand> {
-        return this._commands[command].apply(this._context, args);
+    public async exec(command: string, ...args: string[]): Promise<number | void> {
+        if (this.command_exists(command)) {
+            return this._commands[command].apply(this._context, args);
+        } else {
+            const filename = this.resolve_path(command as any);
+            const stat = await this.fs.stat(filename);
+            if (!stat.isFile()) {
+                throw new Error(`bash: ${command}: Command not found`);
+            }
+            const executable = fs_constants.S_IXUSR | fs_constants.S_IXGRP | fs_constants.S_IXOTH;
+            if ((stat.mode & executable) === 0) {
+                throw new Error(`bash: ${command}: Permission denied`);
+            }
+            return this.script(filename, ...args);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -522,17 +536,7 @@ export class Bash implements BashInterpreter {
             throw new Error(`Invalid value '${ast.name}'`);
         }
         const args = this.suffix(ast.suffix) as string[];
-        if (this.command_exists(command)) {
-            await this.exec(command, ...args);
-        } else {
-            const filename = this.resolve_path(command as any);
-            const stat = await this.fs.stat(filename);
-            if (stat.isFile()) {
-                await this.script(filename, ...args);
-            } else {
-                throw new Error(`command '${command}' not found!`);
-            }
-        }
+        await this.exec(command, ...args);
         if (ast.redirects.length) {
             for (const redirect of ast.redirects) {
                 await this.redirect(redirect);

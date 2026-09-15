@@ -140,3 +140,71 @@ export function color(name: string, string: string) {
         return string;
     }
 }
+
+// ref: https://stackoverflow.com/a/18650828/387194
+export function format_bytes(bytes: number, decimals = 2) {
+    if (!+bytes) {
+        return '0';
+    }
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    const value = parseFloat((bytes / Math.pow(k, i)).toFixed(dm));
+    if (i === 0) {
+        return value.toString();
+    }
+
+    return `${value}${sizes[i]}`;
+}
+
+const MASKS = {
+    // User
+    u: { r: 0o400, w: 0o200, x: 0o100 },
+    // Group
+    g: { r: 0o040, w: 0o020, x: 0o010 },
+    // Others
+    o: { r: 0o004, w: 0o002, x: 0o001 }
+};
+
+export function mode_to_string(mode: number) {
+    const perms = mode & 0o777;
+
+    const result = {
+        owner: {
+            read:    (perms & MASKS.u.r) !== 0,
+            write:   (perms & MASKS.u.w) !== 0,
+            execute: (perms & MASKS.u.x) !== 0,
+        },
+        group: {
+            read:    (perms & MASKS.g.r) !== 0,
+            write:   (perms & MASKS.g.w) !== 0,
+            execute: (perms & MASKS.g.x) !== 0,
+        },
+        others: {
+            read:    (perms & MASKS.o.r) !== 0,
+            write:   (perms & MASKS.o.w) !== 0,
+            execute: (perms & MASKS.o.x) !== 0,
+        }
+    };
+
+    const to_string = (r: boolean, w: boolean, x: boolean) => `${r ? 'r' : '-'}${w ? 'w' : '-'}${x ? 'x' : '-'}`;
+    return [
+        to_string(result.owner.read, result.owner.write, result.owner.execute),
+        to_string(result.group.read, result.group.write, result.group.execute),
+        to_string(result.others.read, result.others.write, result.others.execute)
+    ].join('');
+}
+
+export function file_date(timestamp: number) {
+    const date = new Date(timestamp);
+    const locale = (new Intl.NumberFormat()).resolvedOptions().locale;
+    const mon = date.toLocaleString(locale, { month: 'short' });
+    const day = date.getDate().toString().padStart(2, ' ');
+    const hour = date.getHours().toString().padStart(2, '0');
+    const min = date.getMinutes().toString().padStart(2, '0');
+    return `${mon} ${day} ${hour}:${min}`;
+}
