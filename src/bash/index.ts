@@ -147,7 +147,8 @@ export class Bash implements BashInterpreter {
             bash: () => this,
             stdout: () => this._context.stdout,
             stderr: () => this._context.stderr,
-            stdin: () => this._context.stdin
+            stdin: () => this._context.stdin,
+            path: () => path as unknown as Module
         };
         this.init_ipc_channel();
         const promise = Promise.all(['./process_prefix.js', './process_postfix.js'].map(path => {
@@ -163,25 +164,35 @@ export class Bash implements BashInterpreter {
     private init_ipc_channel() {
         this._channel.addEventListener('message', async (message) => {
             const { data } = message;
-            if (this._modules[data.namespace]) {
-                const id = data.id;
-                const object: any = this._modules[data.namespace]();
-                try {
-                    if (typeof object[data.method] === 'function') {
-                        const result = await object[data.method](...data.args);
-                        this._channel.postMessage({
-                            id,
-                            result
-                        });
-                    } else {
-                        throw new Error(`Invalid call ${data.namespace}::${data.method}`);
-                    }
-                } catch (error) {
+            const id = data.id;
+            try {
+                let object: any;
+                if (this._modules[data.namespace]) {
+                    object = this._modules[data.namespace]();
+                } else {
+                    object = (await import(`https://esm.sh/${data.namespace}`)).default;
+                    this._modules[data.namespace] = () => object;
+                }
+                let fn: any;
+                if (!data.method) {
+                    fn = object;
+                } else if (typeof object[data.method] === 'function') {
+                    fn = object[data.method].bind(object);
+                }
+                if (fn) {
+                    const result = await fn(...data.args);
                     this._channel.postMessage({
                         id,
-                        error
+                        result
                     });
+                } else {
+                    throw new Error(`Invalid call ${data.namespace}::${data.method}`);
                 }
+            } catch (error) {
+                this._channel.postMessage({
+                    id,
+                    error
+                });
             }
         });
     }
