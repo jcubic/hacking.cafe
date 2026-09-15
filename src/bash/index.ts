@@ -114,6 +114,8 @@ class PipeStdin implements Stdin {
     }
 }
 
+type Module = BashInterpreter | PromisifiedFS | Stdin | Stdout;
+
 /*
  * Bash class is more like a Unix system
  *
@@ -124,13 +126,84 @@ export class Bash implements BashInterpreter {
     private _commands: Commands;
     private _env: Environment;
     private _context: BashContext;
-    private  _aliases = {
+    // BroadcastChannel is used to access modules from inside web worker process
+    private _channel: BroadcastChannel;
+    // list of exposed modules for the webworker process
+    private _modules: Record<string, () => Module>;
+    // function that wraps user script with exact code that invoke the main function
+    // and expose modules into via _channel RPC like mechanism
+    private _process: (code: string, args: string[]) => Promise<string>;
+    private _aliases = {
         '.': 'source'
     } as const;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { cwd: context.home, bash: this, ...context };
         this._env = Object.create(null);
+        this._channel = new BroadcastChannel('__ipc__');
+        this._modules = {
+            fs: () => this.fs,
+            bash: () => this,
+            stdout: () => this._context.stdout,
+            stderr: () => this._context.stderr,
+            stdin: () => this._context.stdin
+        };
+        this.init_ipc_channel();
+        const promise = Promise.all(['./process_prefix.js', './process_postfix.js'].map(path => {
+            return fetch(path).then(res => res.text());
+        }));
+        this._process = async (code, args = []) => {
+            const [prefix, postfix] = await promise;
+            return `${prefix}\n${code}\n${postfix.replace('{{ARGS}}', JSON.stringify(args))}`;
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    private init_ipc_channel() {
+        this._channel.addEventListener('message', async (message) => {
+            const { data } = message;
+            if (this._modules[data.namespace]) {
+                const id = data.id;
+                const object: any = this._modules[data.namespace]();
+                try {
+                    if (typeof object[data.method] === 'function') {
+                        const result = await object[data.method](...data.args);
+                        this._channel.postMessage({
+                            id,
+                            result
+                        });
+                    } else {
+                        throw new Error(`Invalid call ${data.namespace}::${data.method}`);
+                    }
+                } catch (error) {
+                    this._channel.postMessage({
+                        id,
+                        error
+                    });
+                }
+            }
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    public resolve_path(pathname: string) {
+        return path.resolve(this.cwd, pathname.replace('~', this.home));
+    }
+
+    // -------------------------------------------------------------------------
+    private async script(filename: string, ...args: string[]): Promise<number> {
+        const file = await this.fs.readFile(filename, 'utf8');
+        const code = await this._process(file, args);
+        const blob = new Blob([code], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+        return new Promise((resolve) => {
+            worker.addEventListener('message', message => {
+                if ('exit' in message.data) {
+                    const code = message.data.exit;
+                    resolve(code);
+                }
+            });
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -445,22 +518,30 @@ export class Bash implements BashInterpreter {
         if (this.alias_exists(command)) {
             command = this._aliases[command];
         }
+        if (typeof command !== 'string') {
+            throw new Error(`Invalid value '${ast.name}'`);
+        }
         const args = this.suffix(ast.suffix) as string[];
         if (this.command_exists(command)) {
             await this.exec(command, ...args);
-
-            if (ast.redirects.length) {
-                for (const redirect of ast.redirects) {
-                    await this.redirect(redirect);
-                }
-            }
-            if (!pipe) {
-                const { stdout, stderr } = this._context;
-                stderr.flush();
-                stdout.flush();
-            }
         } else {
-            throw new Error(`command '${command}' not found!`);
+            const filename = this.resolve_path(command as any);
+            const stat = await this.fs.stat(filename);
+            if (stat.isFile()) {
+                await this.script(filename, ...args);
+            } else {
+                throw new Error(`command '${command}' not found!`);
+            }
+        }
+        if (ast.redirects.length) {
+            for (const redirect of ast.redirects) {
+                await this.redirect(redirect);
+            }
+        }
+        if (!pipe) {
+            const { stdout, stderr } = this._context;
+            stderr.flush();
+            stdout.flush();
         }
     }
 
