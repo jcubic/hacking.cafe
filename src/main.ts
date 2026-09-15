@@ -78,8 +78,13 @@ class BufferTerminalOutput extends BufferOutput {
 class BufferError extends BufferTerminalOutput {
     flush() {
         if (this._buffer.length) {
-            this._term.echo(`<red>${this.output()}</red>`, {
-                newline: false
+            // escape formatting and xml and disable formatters
+            // becasue ANSI formatting unescapes the input
+            let output = $.terminal.escape_brackets(this.output());
+            output = output.replace(/>/g, '&gt;').replace(/</g, '&lt;');
+            this._term.echo(`[[;red;]${output}]`, {
+                newline: false,
+                formatters: false
             });
             this.clear();
         }
