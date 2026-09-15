@@ -50,7 +50,7 @@ import { fs_constants } from './constants';
 
 import * as builtins from './commands';
 
-import { date, char } from './utils';
+import { date, char, import_module } from './utils';
 
 export { color } from './utils';
 
@@ -162,6 +162,18 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // hack to fix Vite module preloading
+    // -------------------------------------------------------------------------
+    private async _import(module: string) {
+        try {
+            return await import_module(`https://esm.sh/${module}`);
+        } catch(e) {
+            console.log(`attempt to load module ${module}`);
+            console.log(e);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     private init_ipc_channel() {
         this._channel.addEventListener('message', async (message) => {
             const { data } = message;
@@ -169,12 +181,15 @@ export class Bash implements BashInterpreter {
             if (!data.namespace) {
                 return;
             }
+            console.log(data);
             try {
                 let object: any;
                 if (this._modules[data.namespace]) {
                     object = this._modules[data.namespace]();
                 } else {
-                    object = (await import(`https://esm.sh/${data.namespace}`)).default;
+                    console.log(data.namespace);
+                    object = await this._import(data.namespace);
+                    console.log({ object });
                     this._modules[data.namespace] = () => object;
                 }
                 let fn: any;
@@ -193,6 +208,7 @@ export class Bash implements BashInterpreter {
                     throw new Error(`Invalid call ${data.namespace}::${data.method}`);
                 }
             } catch (error) {
+                console.log(error);
                 this._channel.postMessage({
                     id,
                     error

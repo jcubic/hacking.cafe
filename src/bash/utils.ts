@@ -257,3 +257,7 @@ export function parse_mode(str: string, mode: number): number {
         }, mode);
     }, mode);
 }
+
+export async function import_module(module: string) {
+    return (await import(module)).default;
+}
