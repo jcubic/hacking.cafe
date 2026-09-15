@@ -222,7 +222,7 @@ const permission_re = /^[ugoa][-+=][rwx](,[ugoa][-+=][rwx])*$/;
 
 // -----------------------------------------------------------------------------
 export function is_permission(arg: string) {
-    return str.match(permission_re);
+    return arg.match(permission_re);
 }
 
 // -----------------------------------------------------------------------------
