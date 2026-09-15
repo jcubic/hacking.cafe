@@ -27,6 +27,7 @@ import type {
     Command,
     Node,
     Word,
+    AndOr,
     Pipeline,
     WordPart,
     DoubleQuotedPart,
@@ -562,7 +563,7 @@ export class Bash implements BashInterpreter {
             throw new Error(`Invalid value '${ast.name}'`);
         }
         const args = this.suffix(ast.suffix) as string[];
-        await this.exec(command, ...args);
+        const code = await this.exec(command, ...args);
         if (ast.redirects.length) {
             for (const redirect of ast.redirects) {
                 await this.redirect(redirect);
@@ -573,6 +574,28 @@ export class Bash implements BashInterpreter {
             stderr.flush();
             stdout.flush();
         }
+        return code;
+    }
+
+    protected async andor(ast: AndOr) {
+        let code;
+        for (let i=0; i < ast.commands.length; ++i) {
+            const command = ast.commands[i];
+            code = await this.command(command as Command);
+            if (ast.operators[i]) {
+                const op = ast.operators[i];
+                if (op === '&&') {
+                    if (code !== 0) {
+                        break;
+                    }
+                } else if (op === '||') {
+                    if (code !== 1) {
+                        break;
+                    }
+                }
+            }
+        }
+        return code;
     }
 
     // -------------------------------------------------------------------------
