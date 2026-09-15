@@ -182,11 +182,6 @@ class Service extends RequestCache {
         $stmt->execute([$name]);
         return $stmt->rowCount() > 0;
     }
-
-    // ------------------------------------------------------------------------
-    public function hello($name) {
-        return "hello, <white>$name</white>!";
-    }
 }
 
 (new Server(new Service()))->handle();

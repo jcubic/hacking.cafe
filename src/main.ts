@@ -110,9 +110,6 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     const host = 'hacking.cafe';
 
     const commands = {
-        async hello(name: string) {
-            await service.hello(name);
-        },
         // ---------------------------------------------------------------------
         async less(this: BashContext, fname?: string) {
             let content;
