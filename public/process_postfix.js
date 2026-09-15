@@ -6,7 +6,6 @@
     }
 } catch (error) {
     await __modules__.stderr.writeln(error.message);
-    await __modules__.stderr.writeln(error.stack);
     self.postMessage({ exit: 100 });
     self.close();
 }
