@@ -1,0 +1,20 @@
+const figlet = require('figlet');
+const stdout = require('stdout');
+const parse = require('@jcubic/lily');
+
+async function main(...args) {
+    const options = await parse(args);
+    const font = options.font
+    await load_fonts(options.font ? [font] : ['Standard']);
+    const message = options._.join(' ');
+    const text = await figlet.text(message, {
+        font
+    });
+    await stdout.writeln(text);
+    return 0;
+}
+
+async function load_fonts(fonts = ['Standard']) {
+    figlet.defaults({ fontPath: 'https://cdn.jsdelivr.net/npm/figlet/fonts' });
+    await figlet.preloadFonts(fonts);
+}
