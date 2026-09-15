@@ -30,11 +30,15 @@ import unix from 'jquery.terminal/js/unix_formatting.js';
 
 import pipe from 'jquery.terminal/js/pipe.js';
 
+// @ts-expect-error
+import prism from 'jquery.terminal/js/prism.js';
+
 export const $ = terminal(window, jQuery) as any as JQueryStatic;
 xml(window, $);
 less(window, $);
 pipe(window, $);
 unix(window, $);
+prism(window, $);
 
 export type JQueryTerminal = ReturnType<JQuery['terminal']>;
 

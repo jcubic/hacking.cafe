@@ -148,7 +148,8 @@ export class Bash implements BashInterpreter {
             stdout: () => this._context.stdout,
             stderr: () => this._context.stderr,
             stdin: () => this._context.stdin,
-            path: () => path as unknown as Module
+            path: () => path as unknown as Module,
+            '$.terminal': () => $.terminal as unknown as Module
         };
         this.init_ipc_channel();
         const promise = Promise.all(['./process_prefix.js', './process_postfix.js'].map(path => {
@@ -165,6 +166,9 @@ export class Bash implements BashInterpreter {
         this._channel.addEventListener('message', async (message) => {
             const { data } = message;
             const id = data.id;
+            if (!data.namespace) {
+                return;
+            }
             try {
                 let object: any;
                 if (this._modules[data.namespace]) {
