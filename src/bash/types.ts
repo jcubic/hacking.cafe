@@ -79,6 +79,7 @@ export type UserData = {
 }
 
 export interface BashInterpreter {
+    get commands(): string[];
     get home(): string;
     get user(): string;
     get host(): string;

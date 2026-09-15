@@ -248,7 +248,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
         // ---------------------------------------------------------------------
         help(this: BashContext) {
             function command_list() {
-                const list = Object.keys(commands);
+                const list = bash.commands;
                 list.push('clear');
                 return list.map(cmd => `<command>${cmd}</command>`);
             }
@@ -280,10 +280,6 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     });
 
     // -------------------------------------------------------------------------
-
-    const command_list = Object.keys(commands);
-
-    // -------------------------------------------------------------------------
     const completion = async function(this: JQueryTerminal, string: string) {
         var cmd = $.terminal.parse_command(this.before_cursor());
         if (cmd.name !== string) {
@@ -297,7 +293,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                     return await bash.completion(string, Completion.Directory);
             }
         }
-        return command_list;
+        return bash.commands;
     };
 
     term.option('completion', completion);

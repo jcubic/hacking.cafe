@@ -161,6 +161,10 @@ export class Bash implements BashInterpreter {
         };
     }
 
+    get commands() {
+        return Object.keys(this._commands);
+    }
+
     // -------------------------------------------------------------------------
     // hack to fix Vite module preloading
     // -------------------------------------------------------------------------
