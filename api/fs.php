@@ -32,7 +32,7 @@
  *  along with Hacking Cafe.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-require __DIR__ . '/fs/LightningFS.php';
+require __DIR__ . '/lib/LightningFS.php';
 
 // CORS: the Vite dev server runs on a different port
 header('Access-Control-Allow-Origin: *');

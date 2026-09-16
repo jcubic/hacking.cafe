@@ -87,7 +87,6 @@ export interface BashInterpreter {
     set cwd(dir: string);
     fork(): BashInterpreter;
     init(): Promise<void>;
-    setup(): Promise<void>;
     users(): Promise<UserData[]>;
     executables(dir: string): Promise<string[]>;
     resolve_path(path: string): string;

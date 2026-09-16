@@ -204,7 +204,7 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    // hack to fix Vite module preloading
+    // hack to fix Vite dynamic module preloading
     // -------------------------------------------------------------------------
     private async _import(module: string) {
         return await import_module(`https://esm.sh/${module}`);
@@ -285,7 +285,7 @@ export class Bash implements BashInterpreter {
 
     // -------------------------------------------------------------------------
     public resolve_path(pathname: string) {
-        return path.resolve(this.cwd, pathname.replace('~', this.home));
+        return path.resolve(this.cwd, pathname.replace(/^~/, this.home));
     }
 
     // -------------------------------------------------------------------------
@@ -327,27 +327,6 @@ export class Bash implements BashInterpreter {
             return await this.fs.readFile(pathname, 'utf8');
         } catch(e) {
             return null;
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // setup needs to be called first after Bash class is created
-    // it creates basic file system files and user that bash was created for
-    // -------------------------------------------------------------------------
-    public async setup() {
-        const users = await this.users();
-        if (users.length === 0) {
-            try {
-                await this.fs.stat('/etc');
-            } catch (e) {
-                await this.fs.mkdir('/etc');
-            }
-            await this.fs.writeFile('/etc/passwd', 'root:x:0:0:Super User:/root:/bin/bash\n');
-        }
-        try {
-            await this.fs.stat(this.home);
-        } catch(e) {
-            await this.exec('adduser', this.user);
         }
     }
 

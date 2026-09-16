@@ -1,0 +1,27 @@
+#!/bin/js
+
+const stdout = require('stdout');
+const stdin = require('stdin');
+const cowsay = require('cowsay');
+const parse = require('@jcubic/lily');
+const terminal = require('$.terminal');
+
+async function main(...args) {
+    const options = await parse(args);
+    let text;
+    if (options._.length) {
+        text = options._.join(' ');
+    } else {
+        text = await stdin.read();
+    }
+    let result = await cowsay.say({
+        text : text,
+        e : 'oO',
+        T : 'U '
+    });
+    result = result.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    result = await terminal.escape_brackets(result);
+
+    await stdout.writeln(result);
+    return 0;
+}

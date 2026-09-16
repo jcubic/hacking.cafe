@@ -22,7 +22,8 @@
  */
 
 require __DIR__ . '/vendor/autoload.php';
-require __DIR__ . '/cache.php';
+require __DIR__ . '/lib/RequestCache.php';
+require __DIR__ . '/lib/utils.php';
 
 use Jcubic\JsonRpc\Server;
 
@@ -182,6 +183,28 @@ class Service extends RequestCache {
         $stmt = $this->fs_db->prepare('DELETE FROM fs WHERE name = ?');
         $stmt->execute([$name]);
         return $stmt->rowCount() > 0;
+    }
+
+    // ------------------------------------------------------------------------
+    public function init_list() {
+        $lists = read_all_files('.' . DIRECTORY_SEPARATOR . 'fs' . DIRECTORY_SEPARATOR);
+        foreach ($lists as $name => $list) {
+            $lists[$name] = array_map(function($path) {
+                return preg_replace("%\\./fs%", "", $path);
+            }, $list);
+        }
+        return $lists;
+    }
+
+    // ------------------------------------------------------------------------
+    public function init_read($file) {
+        $root = realpath(__DIR__ . '/fs');
+        $path = realpath(__DIR__ . '/fs' . $file);
+        $in_root = $path !== false && strncmp($path, $root . DIRECTORY_SEPARATOR, strlen($root) + 1) === 0;
+        if (!$in_root) {
+            throw new \Jcubic\JsonRpc\JsonRpcException(104, "init_read: invalid path '$file'");
+        }
+        return file_get_contents($path);
     }
 }
 

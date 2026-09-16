@@ -25,7 +25,8 @@ import { z } from 'zod';
 import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
-
+import type { ListDir } from './bash/types';
+import { system_details } from './utils';
 import {
     Bash,
     BufferOutput,
@@ -312,13 +313,53 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     (window as any).term = term;
     (term as any).fs = fs;
 
-    await bash.setup();
+    // intialize the file system after update or deleting of files
+    const paths = await service.init_list() as ListDir;
+    for (const pathname of paths.dirs) {
+        try {
+            const stat = await fs.stat(pathname);
+            if (stat.isFile()) {
+                await fs.unlink(pathname);
+                make_dir(pathname);
+            }
+        } catch(e) {
+            make_dir(pathname);
+        }
+    }
+    for (const pathname of paths.files) {
+        try {
+            const stat = await fs.stat(pathname);
+            if (stat.isDirectory()) {
+                await bash.exec('rm', '-r', pathname);
+                make_file(pathname);
+            }
+        } catch(e) {
+            make_file(pathname);
+        }
+    }
+
+    // restore user when deleted
+    await bash.exec('adduser', user);
 
     await bash.init();
 
     term.set_prompt(() => {
         return bash.prompt();
     });
+
+    // -------------------------------------------------------------------------
+    async function make_file(path: string) {
+        const content = await service.init_read(path) as string;
+        await fs.writeFile(path, content);
+        if (path.startsWith('/bin/')) {
+            await bash.exec('chmod', 'a+x,g-w,a-w', path);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    async function make_dir(path: string) {
+        await bash.exec('mkdir', '-p', path);
+    }
 
     // -------------------------------------------------------------------------
     return [
@@ -375,40 +416,4 @@ function display_rfc(rfc: string) {
     rfc = rfc.replace(/</g, '&lt;');
     rfc = rfc.replace(/>/g, '&gt;');
     term.less(rfc);
-}
-
-function gpu() {
-    const offscreen = new OffscreenCanvas(256, 256);
-    const gl = offscreen.getContext('webgl') as WebGLRenderingContext;
-
-    let unMaskedInfo = {
-        renderer: '',
-        vendor: ''
-    };
-
-    const dbgRenderInfo = gl.getExtension('WEBGL_debug_renderer_info');
-    if (dbgRenderInfo != null) {
-        unMaskedInfo.renderer = gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL);
-        unMaskedInfo.vendor = gl.getParameter(dbgRenderInfo.UNMASKED_VENDOR_WEBGL);
-    }
-
-    return unMaskedInfo;
-}
-
-function system_details() {
-    // @ts-expect-error
-    const OS = navigator.oscpu || navigator.platform;
-    // @ts-expect-error
-    const browser = navigator.userAgentData && navigator.userAgentData.brands.at(-1);
-    return {
-        Resolution: `${screen.width}x${screen.height}`,
-        Browser: browser ? `${browser.brand} ${browser.version}` : navigator.userAgent,
-        OS,
-        // @ts-expect-error
-        RAM: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : null,
-        CPU: `${navigator.hardwareConcurrency} threads`,
-        GPU: gpu().renderer,
-        Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        Language: navigator.language
-    } as const;
 }

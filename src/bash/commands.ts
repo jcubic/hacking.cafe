@@ -25,7 +25,7 @@ import path from 'path-browserify';
 
 import { fs_constants } from './constants';
 
-import type { BashContext, Stats } from './types';
+import type { BashContext, Stats, UserData } from './types';
 
 import {
     char,
@@ -224,20 +224,25 @@ export async function adduser(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (options._.length === 1) {
         const [ user ] = options._;
-        const home = `/home/${user}`;
+        const home = path.join('/home/', user);
         try {
-            await this. fs.stat(home);
-            throw new Error(`User ${user} already exist`);
+            await this.fs.stat(home);
         } catch(e) {
             await this.bash.exec('mkdir', '-p', home);
-
+        }
+        const bashrc_path = path.join('/home/', user, '.bashrc');
+        try {
+            await this.fs.stat(bashrc_path);
+        } catch(e) {
             const bashrc = [
                 String.raw`PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "`,
+                'PATH=/bin/',
                 ''
             ].join('\n');
             await this.fs.writeFile(`${home}/.bashrc`, bashrc);
-
-            let users = await this.bash.users();
+        }
+        let users = await this.bash.users();
+        if (!users.some((data: UserData) => data.username === user)) {
             const passwd = users.map(user => user.text).concat([
                 `${user}:x:502:502:Guest User:/home/${user}:/bin/bash`,
                 ''
