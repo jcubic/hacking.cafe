@@ -162,12 +162,13 @@ export class Bash implements BashInterpreter {
             '$.terminal': () => $.terminal as unknown as Module
         };
         this.init_ipc_channel();
-        const promise = Promise.all(['./process_prefix.js', './process_postfix.js'].map(path => {
-            return fetch(path).then(res => res.text());
-        }));
+        // we can't use await in contructor but we want to initalize
+        // all the fields
+        const promise = fetch('./process.js').then(res => res.text());
         this._process = async (code, args = []) => {
-            const [prefix, postfix] = await promise;
-            return `${prefix}\n${code}\n${postfix.replace('{{ARGS}}', JSON.stringify(args))}`;
+            const wrapper = await promise;
+            const _args = JSON.stringify(args)
+            return wrapper.replace('{{ARGS}}', _args).replace('{{CODE}}', code);
         };
     }
 
