@@ -429,8 +429,18 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     private async find_name(command: string): Promise<string | null> {
         try {
+            try {
+                const path = this.resolve_path(command);
+                const stat = await this.fs.stat(path);
+                if (stat.isFile()) {
+                    return path;
+                }
+            } catch(e) {
+                // ignore
+            }
             const PATH = this.variable('$PATH') as string;
-            for (const fullpath of PATH.split(':')) {
+            for (const search_path of PATH.split(':')) {
+                const fullpath = this.resolve_path(search_path);
                 const files = await this.fs.readdir(fullpath);
                 if (files.includes(command)) {
                     return path.join(fullpath, command);
