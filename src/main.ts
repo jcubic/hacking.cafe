@@ -245,7 +245,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             const list = formatter.format(command_list());
             this.stdout.writeln(`Available commands: ${list}.`);
             const scripts = (await bash.executables('/bin')).map(cmd => {
-                return `<command>/bin/${cmd}</command>`;
+                return `<command>${cmd}</command>`;
             });
             if (scripts.length) {
                 const list = formatter.format(scripts);
