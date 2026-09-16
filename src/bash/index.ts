@@ -27,15 +27,19 @@ import type {
     Node,
     Word,
     AndOr,
+    Script,
     Command,
     Redirect,
     Pipeline,
     WordPart,
     Statement,
+    ParsedScript,
     CompoundList,
     DoubleQuotedPart,
     DoubleQuotedChild
 } from 'unbash';
+
+type AstNode = Node | Script | ParsedScript;
 
 import type {
     Stdout,
@@ -92,6 +96,11 @@ export class BufferOutput implements Stdout {
     writeln(str: string) {
         this.write(str + '\n');
     }
+}
+
+class SilientOutput extends BufferOutput {
+    flush() { }
+    clear() { }
 }
 
 /*
@@ -523,27 +532,33 @@ export class Bash implements BashInterpreter {
             const ast = parse(code);
 
             if (ast.errors) {
-                throw new Error(ast.errors[0].message);
+                const err = ast.errors[0];
+                throw new Error(`${err.message} at ${err.pos}`);
             }
-
-            let result;
-            for (const command of ast.commands) {
-                result = await this.dispatch(command);
-            }
-            return typeof result === 'number' ? result : 0;
+            return this.dispatch(ast);
         }
         return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    protected async Script(ast: Script | ParsedScript) {
+        let result;
+        for (const command of ast.commands) {
+            result = await this.dispatch(command);
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------
     // main function used by evaluate to call dedicated method for a given
     // AST Node type
     // -------------------------------------------------------------------------
-    protected dispatch(ast: Node): TypeOrPromise<unknown> {
+    protected async dispatch(ast: AstNode): Promise<number> {
         const bash = this as unknown as Record<string, unknown>;
         const type = ast.type as string;
         if (typeof bash[type] === 'function') {
-            return bash[type](ast);
+            const result = await bash[type](ast);
+            return typeof result === 'number' ? result : 0;
         }
         throw new Error(`Unkown node '${type}'!`);
     }
@@ -623,7 +638,7 @@ export class Bash implements BashInterpreter {
     // method to parse expressions. It's double purpose for standalone
     // expressions and inside double quoted parts.
     // -------------------------------------------------------------------------
-    protected simple(ast: WordPart | DoubleQuotedChild) {
+    protected async simple(ast: WordPart | DoubleQuotedChild) {
         switch (ast.type) {
             case 'DoubleQuoted':
                 return this.quote(ast);
@@ -644,6 +659,13 @@ export class Bash implements BashInterpreter {
                 return this.variable('$' + ast.parameter);
             }
             case 'CommandExpansion':
+                const bash = this.fork();
+                const buffer = new SilientOutput();
+                bash._context.stdout = buffer;
+                if (ast.script) {
+                    await bash.dispatch(ast.script);
+                }
+                return buffer.output().replace(/\n+$/, '');
             case 'ArithmeticExpansion':
         }
         throw new Error(`Unkown Bash expression ${ast.text}`);
@@ -652,19 +674,20 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     // suffix contains arguments to a command
     // -------------------------------------------------------------------------
-    protected suffix(ast: Word[]) {
+    protected async suffix(ast: Word[]) {
         const args = [];
         for (const suffix of ast) {
-            args.push(this.resolve(suffix));
+            args.push(await this.resolve(suffix));
         }
         return args;
     }
 
     // -------------------------------------------------------------------------
-    protected quote(ast: DoubleQuotedPart): string {
-        return ast.parts.map(part => {
+    protected async quote(ast: DoubleQuotedPart): Promise<string> {
+        const string = await Promise.all(ast.parts.map(part => {
             return this.simple(part);
-        }).join('');
+        }));
+        return string.join('');
     }
 
     // -------------------------------------------------------------------------
@@ -697,19 +720,19 @@ export class Bash implements BashInterpreter {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
                 if (prefix.type === 'Assignment' && prefix.value) {
-                    this._env['$' + prefix.name] = this.resolve(prefix.value);
+                    this._env['$' + prefix.name] = await this.resolve(prefix.value);
                 }
             }
             return;
         }
-        let command = this.resolve(ast.name);
+        let command = await this.resolve(ast.name);
         if (this.alias_exists(command)) {
             command = this._aliases[command];
         }
         if (typeof command !== 'string') {
             throw new Error(`Invalid value '${ast.name}'`);
         }
-        const args = this.suffix(ast.suffix) as string[];
+        const args = (await this.suffix(ast.suffix)) as string[];
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
         if (input_redir.length) {
