@@ -251,7 +251,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             this.stdout.writeln(text);
         },
         // ---------------------------------------------------------------------
-        help(this: BashContext) {
+        async help(this: BashContext) {
             function command_list() {
                 const list = bash.commands;
                 list.push('clear');
@@ -259,8 +259,15 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             }
             const list = formatter.format(command_list());
             this.stdout.writeln(`Available commands: ${list}.`);
+            const scripts = (await bash.executables('/bin')).map(cmd => {
+                return `<command>/bin/${cmd}</command>`;
+            });
+            if (scripts.length) {
+                const list = formatter.format(scripts);
+                this.stdout.writeln(`Available scripts in /bin directory ${list}`);
+            }
             this.stdout.writeln('An <command>rfc</command> command use simplifed unix ' +
-                                'less command.\n');
+                'less command.\n');
         }
     };
 

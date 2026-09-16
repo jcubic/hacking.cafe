@@ -1,4 +1,5 @@
 const figlet = require('figlet');
+const stdin = require('stdin');
 const stdout = require('stdout');
 const parse = require('@jcubic/lily');
 
@@ -6,7 +7,12 @@ async function main(...args) {
     const options = await parse(args);
     const font = options.font
     await load_fonts(options.font ? [font] : ['Standard']);
-    const message = options._.join(' ');
+    let message;
+    if (!options._.length) {
+        message = await stdin.read();
+    } else {
+        message = options._.join(' ');
+    }
     const text = await figlet.text(message, {
         font
     });

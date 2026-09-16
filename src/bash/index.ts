@@ -51,7 +51,7 @@ import { fs_constants } from './constants';
 
 import * as builtins from './commands';
 
-import { date, char, import_module } from './utils';
+import { date, char, import_module, list_executables } from './utils';
 
 export { color } from './utils';
 
@@ -324,6 +324,11 @@ export class Bash implements BashInterpreter {
     }
     set cwd(dir: string) {
         this._context.cwd = dir;
+    }
+
+    // -------------------------------------------------------------------------
+    public executables(dir: string) {
+        return list_executables(this.fs, dir);
     }
 
     // -------------------------------------------------------------------------

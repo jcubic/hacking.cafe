@@ -22,6 +22,7 @@
 import path from 'path-browserify';
 
 import type { ListDir, PromisifiedFS } from './types';
+import { fs_constants } from './constants';
 
 // -----------------------------------------------------------------------------
 export function char(int: number) {
@@ -115,6 +116,26 @@ export async function list_dir(fs: PromisifiedFS, dir: string): Promise<ListDir>
     }
     return { files, dirs };
 }
+
+// -----------------------------------------------------------------------------
+export async function list_executables(fs: PromisifiedFS, dir: string): Promise<string[]> {
+    const executable = fs_constants.S_IXUSR | fs_constants.S_IXGRP | fs_constants.S_IXOTH;
+    const dir_list = await fs.readdir(dir);
+    const result: string[] = [];
+    for (const name of dir_list) {
+        const file = path.join(dir, name);
+        try {
+            const stat = await fs.stat(file);
+            if (stat.isFile() && (stat.mode & executable) !== 0) {
+                result.push(name);
+            }
+        } catch(e) {
+            throw new Error(`Internal: scaned file ${file} doesn't exist`);
+        }
+    }
+    return result;
+}
+
 
 // -----------------------------------------------------------------------------
 const COLORS = {
