@@ -320,10 +320,10 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             const stat = await fs.stat(pathname);
             if (stat.isFile()) {
                 await fs.unlink(pathname);
-                make_dir(pathname);
+                await make_dir(pathname);
             }
         } catch(e) {
-            make_dir(pathname);
+            await make_dir(pathname);
         }
     }
     for (const pathname of paths.files) {
@@ -331,10 +331,10 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             const stat = await fs.stat(pathname);
             if (stat.isDirectory()) {
                 await bash.exec('rm', '-r', pathname);
-                make_file(pathname);
+                await make_file(pathname);
             }
         } catch(e) {
-            make_file(pathname);
+            await make_file(pathname);
         }
     }
 
