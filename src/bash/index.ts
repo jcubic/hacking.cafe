@@ -125,15 +125,18 @@ type Module = BashInterpreter | PromisifiedFS | Stdin | Stdout;
  *
  */
 export class Bash implements BashInterpreter {
+    // object containing builtin and user commands
     private _commands: Commands;
+    // env contain variables defined in bash
     private _env: Environment;
+    // context is object that is passed to builtin commands as this
     private _context: BashContext;
     // BroadcastChannel is used to access modules from inside web worker process
     private _channel: BroadcastChannel;
     // list of exposed modules for the webworker process
     private _modules: Record<string, () => Module>;
-    // function that wraps user script with exact code that invoke the main function
-    // and expose modules into via _channel RPC like mechanism
+    // function that wraps user script with exact code that invoke the main
+    // function and expose modules into via _channel RPC like mechanism
     private _process: (code: string, args: string[]) => Promise<string>;
     private _aliases = {
         '.': 'source'
@@ -173,6 +176,12 @@ export class Bash implements BashInterpreter {
         return await import_module(`https://esm.sh/${module}`);
     }
 
+    // -------------------------------------------------------------------------
+    // boroadcast channel for communication with web worker scripts
+    // it exposes modules via RPC-like mechanizm using Proxy objects
+    // inside prefix scripts added by this._process() the modules
+    // are accessed via require() helper. When user try to import a module
+    // that doesn't exist it load it from dynamic import
     // -------------------------------------------------------------------------
     private init_ipc_channel() {
         this._channel.addEventListener('message', async (message) => {
@@ -219,6 +228,9 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // run user defined script (a JavaScript code) from FS
+    // the file always exist and is executable when this function is called
+    // -------------------------------------------------------------------------
     private async script(filename: string, ...args: string[]): Promise<number> {
         const file = await this.fs.readFile(filename, 'utf8');
         const code = await this._process(file, args);
@@ -244,6 +256,9 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // setup needs to be called first after Bash class is created
+    // it creates basic file system files and user that bash was created for
+    // -------------------------------------------------------------------------
     public async setup() {
         const users = await this.users();
         if (users.length === 0) {
@@ -261,6 +276,8 @@ export class Bash implements BashInterpreter {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // init should be called after setup() it initalize bash
     // -------------------------------------------------------------------------
     public async init() {
         const home = await this.content(`/home/${this.user}/.bashrc`);
@@ -296,6 +313,62 @@ export class Bash implements BashInterpreter {
             }
         }
         return result;
+    }
+
+    
+
+    // -------------------------------------------------------------------------
+    // parses bash prompt variable
+    // -------------------------------------------------------------------------
+    // example Ubuntu prompts:
+    // simple: PS1="\u@\h:\w\$ "
+    // color: PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+    // -------------------------------------------------------------------------
+    prompt() {
+        let prompt;
+        try {
+            prompt = this.variable('$PS1');
+        } catch (e) {
+            // ignore
+        } finally {
+            if (typeof prompt !== 'string') {
+                prompt = '\\$ ';
+            }
+        }
+        return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
+            if (seq.match(/^[0-7]+$/)) {
+                return char(parseInt(seq, 8));
+            }
+            switch (seq[0]) {
+                case '\\':
+                    return '\\';
+                case 's':
+                    return 'bash';
+                case '$':
+                    // # for root
+                    return '$';
+                case '[':
+                case ']':
+                    return '';
+                case 'e':
+                    return char(0x1b);
+                case 'd':
+                    return date();
+                case 'h':
+                    return this.host;
+                case 'w':
+                    return this.cwd.replace(this.home, '~');
+                case 'W':
+                    if (this.cwd === this.home) {
+                        return '~';
+                    } else {
+                        return path.basename(this.cwd);
+                    }
+                case 'u':
+                    return this.user;
+            }
+            return seq;
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -378,6 +451,8 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // main entry point for executing Bash code
+    // -------------------------------------------------------------------------
     public async evaluate(code: string) {
         if (code.trim()) {
             const ast = parse(code);
@@ -395,57 +470,8 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    // example Ubuntu prompts:
-    // simple: PS1="\u@\h:\w\$ "
-    // color: PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
-    // -------------------------------------------------------------------------
-    prompt() {
-        let prompt;
-        try {
-            prompt = this.variable('$PS1');
-        } catch (e) {
-            // ignore
-        } finally {
-            if (typeof prompt !== 'string') {
-                prompt = '\\$ ';
-            }
-        }
-        return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
-            if (seq.match(/^[0-7]+$/)) {
-                return char(parseInt(seq, 8));
-            }
-            switch (seq[0]) {
-                case '\\':
-                    return '\\';
-                case 's':
-                    return 'bash';
-                case '$':
-                    // # for root
-                    return '$';
-                case '[':
-                case ']':
-                    return '';
-                case 'e':
-                    return char(0x1b);
-                case 'd':
-                    return date();
-                case 'h':
-                    return this.host;
-                case 'w':
-                    return this.cwd.replace(this.home, '~');
-                case 'W':
-                    if (this.cwd === this.home) {
-                        return '~';
-                    } else {
-                        return path.basename(this.cwd);
-                    }
-                case 'u':
-                    return this.user;
-            }
-            return seq;
-        });
-    }
-
+    // main function used by evaluate to call dedicated method for a given
+    // AST Node type
     // -------------------------------------------------------------------------
     protected dispatch(ast: Node): TypeOrPromise<void> {
         const type = ast.type.toLowerCase();
@@ -490,6 +516,9 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // method to parse expressions. It's double purpose for standalone
+    // expressions and inside double quoted parts.
+    // -------------------------------------------------------------------------
     protected simple(ast: WordPart | DoubleQuotedChild) {
         switch (ast.type) {
             case 'DoubleQuoted':
@@ -517,6 +546,8 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // suffix contains arguments to a command
+    // -------------------------------------------------------------------------
     protected suffix(ast: Word[]) {
         const args = [];
         for (const suffix of ast) {
@@ -532,6 +563,11 @@ export class Bash implements BashInterpreter {
         }).join('');
     }
 
+    // -------------------------------------------------------------------------
+    // swap stdin and stdout for the pipeline. Pipes are not line oriented
+    // like in Unix, they process whole input and then call next command
+    // in the pipe. This is handled by the Buffered Output and buffer swaping
+    // by PipeInput/Output class.
     // -------------------------------------------------------------------------
     protected async pipeline(ast: Pipeline) {
         const { stdin, stdout, stderr } = this._context;
@@ -549,6 +585,8 @@ export class Bash implements BashInterpreter {
         this._context.stdin = stdin;
     }
 
+    // -------------------------------------------------------------------------
+    // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
     protected async command(ast: Command, pipe = false) {
         if (!ast.name) {
@@ -582,6 +620,7 @@ export class Bash implements BashInterpreter {
         return code;
     }
 
+    // -------------------------------------------------------------------------
     protected async andor(ast: AndOr) {
         let code;
         for (let i=0; i < ast.commands.length; ++i) {
