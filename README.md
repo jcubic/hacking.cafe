@@ -7,10 +7,67 @@
 This project is a continuation of [Fake Linux Terminal](https://github.com/jcubic/fake-linux-terminal).
 The aim is to create a persistent Unix-like system in the browser. With the help from some backend code.
 
+## TODO
+
+- [x]: `~/.bashrc` and `/etc/bashrc` files
+- [x]: `$PS1` variable
+- [x]: `$PATH` variable
+- [x]: subshells
+- [x]: If statements
+- [x]: and/or expressions
+- [x]: double-quote expressions
+- [x]: variable assignments
+- [x]: pipes
+- [x]: redirects (`>` and `<`)
+- [x]: JavaScript programs using web workers
+- [x]: Bash scripts and shebang
+- [ ]: variable expansions:
+  - [ ]: `${VAR:-default}`
+  - [ ]: `${DATABASE_URL:="localhost"}`
+  - [ ]: `USER_ID=${1:?"Error, arg missing!"}`
+  - [ ]: `${var:+alternative}`
+  - [ ]: `${VAR/x/y}` - replace
+  - [ ]: `${TEXT:4}` `${TEXT:0:4}` - substring
+  - [ ]: `${FILE%.*}` - remove traling non-greedy
+  - [ ]: `${PATH%%:*}` remove traling greedy
+  - [ ]: `${PATH##*/}` - remove greedy before
+  - [ ]: `EXTENSION=${FILE#*.}` remove before
+  - [ ]: `${NAME^}` camel case
+  - [ ]: `${NAME^^}` upper case
+  - [ ]: `LEN=${#NAME}` - string length
+  - [ ]: `${!POINTER}` - indirect variable
+- [ ]: run in background `&` (bash in worker?)
+- [ ]: process substitution `<(command)` and `>(command)`
+- [ ]: extract commands like `cat` or `grep` into scripts in `/bin`
+- [ ]: glob patterns
+- [ ]: `test` command
+- [ ]: aliases and functions
+- [ ]: order: keywords => aliases => function => builtins => executables
+- [ ]: `printf`
+- [ ]: `pushd`/`popd`
+- [ ]: `for`, `while`, `until`
+- [ ]: `while read line`
+- [ ]: `case esac`
+- [ ]: `$0`-`$9`
+- [ ]: `$@` / `$*` / `$#`
+- [ ]: `read -p "contunue? (y/n) "`
+- [ ]: history
+- [ ]: export / unset
+- [ ]: completion
+
+## Limitations
+
+Bash expact aliases before processing keyboards, which allows changing syntax. By design
+Hacking Cafe will only expand aliases as commands.
+
+## Commercial License
+
+If you want to acquire a commercial license, you can contact me via <jcubic@jcubic.pl>.
+
 ## License
 
 ```
-    Copyright (c) 2026 Jakub T. Jankiewicz <https://jcubic.pl/me>
+    Copyright (c) 2026 Jakub T. Jankiewicz <https://jakub.jankiewicz.org>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
