@@ -427,11 +427,31 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    private async find_name(command: string): Promise<string | null> {
+        try {
+            const PATH = this.variable('$PATH') as string;
+            for (const fullpath of PATH.split(':')) {
+                const files = await this.fs.readdir(fullpath);
+                if (files.includes(command)) {
+                    return path.join(fullpath, command);
+                }
+            }
+            return null;
+        } catch(e) {
+            // ignore invalid path
+            return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
     public async exec(command: string, ...args: string[]): Promise<number | void> {
         if (this.command_exists(command)) {
             return this._commands[command].apply(this._context, args);
         } else {
-            const filename = this.resolve_path(command as any);
+            const filename = await this.find_name(command as any);
+            if (!filename) {
+                throw new Error(`bash: ${command}: Command not found`);
+            }
             const stat = await this.fs.stat(filename);
             if (!stat.isFile()) {
                 throw new Error(`bash: ${command}: Command not found`);
