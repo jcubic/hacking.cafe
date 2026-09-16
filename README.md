@@ -26,7 +26,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ]: `${DATABASE_URL:="localhost"}`
   - [ ]: `USER_ID=${1:?"Error, arg missing!"}`
   - [ ]: `${var:+alternative}`
-  - [ ]: `${VAR/x/y}` - replace
+  - [x]: `${VAR/x/y}` - replace
   - [ ]: `${TEXT:4}` `${TEXT:0:4}` - substring
   - [ ]: `${FILE%.*}` - remove traling non-greedy
   - [ ]: `${PATH%%:*}` remove traling greedy

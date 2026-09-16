@@ -626,12 +626,14 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected resolve(ast: Word) {
+    protected async resolve(ast: Word): Promise<string> {
         if (!ast.parts?.length) {
             return ast.value;
         }
-        const [ part ] = ast.parts;
-        return this.simple(part);
+        const result = await Promise.all(ast.parts.map((part) => {
+            return this.simple(part);
+        }));
+        return result.join('');
     }
 
     // -------------------------------------------------------------------------
@@ -654,6 +656,16 @@ export class Bash implements BashInterpreter {
             }
             case 'ParameterExpansion': {
                 if (ast.operator) {
+                    switch (ast.operator) {
+                        case '/':
+                            if (ast.replace) {
+                                const variable = this.variable('$' + ast.parameter);
+                                const repl = ast.replace;
+                                const pattern = await this.resolve(repl.pattern);
+                                const replace = await this.resolve(repl.replacement);
+                                return variable.toString().replace(pattern, replace);
+                            }
+                    }
                     throw new Error(`Unkown Bash substitution ${ast.text}`);
                 }
                 return this.variable('$' + ast.parameter);
@@ -672,12 +684,10 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    // suffix contains arguments to a command
-    // -------------------------------------------------------------------------
-    protected async suffix(ast: Word[]) {
+    protected async words(ast: Word[]) {
         const args = [];
-        for (const suffix of ast) {
-            args.push(await this.resolve(suffix));
+        for (const arg of ast) {
+            args.push(await this.resolve(arg));
         }
         return args;
     }
@@ -732,7 +742,7 @@ export class Bash implements BashInterpreter {
         if (typeof command !== 'string') {
             throw new Error(`Invalid value '${ast.name}'`);
         }
-        const args = (await this.suffix(ast.suffix)) as string[];
+        const args = (await this.words(ast.suffix)) as string[];
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
         if (input_redir.length) {

@@ -47,7 +47,7 @@ export type Commands = {
 export type Variable = string | string[] | {[key: string]: string};
 
 export type Environment = {
-    [key: string]: Variable | undefined;
+    [key: string]: Variable;
 };
 
 export type BashContext = {
