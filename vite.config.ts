@@ -31,25 +31,19 @@ export default defineConfig({
         viteStaticCopy({
             targets: [
                 {
-                    src: 'api/jargon/*',
-                    dest: '.'
-                },
-                {
-                    src: 'api/*.php',
+                    // every api file, except secrets, runtime databases and editor backups
+                    src: [
+                        'api/**',
+                        '!api/**/.env*',
+                        '!api/**/*.db',
+                        '!api/**/*~'
+                    ],
                     dest: '.'
                 },
                 {
                     src: 'public/favicon/favicon.ico',
                     dest: '.',
                     rename: { stripBase: true }
-                },
-                {
-                    src: 'api/fs/*.php',
-                    dest: '.'
-                },
-                {
-                    src: 'api/vendor/**',
-                    dest: '.'
                 }
             ]
         })
