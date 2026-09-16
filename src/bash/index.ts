@@ -23,16 +23,18 @@ import { parse } from 'unbash';
 import path from 'path-browserify';
 
 import type {
-    Statement,
-    Command,
+    If,
     Node,
     Word,
     AndOr,
+    Command,
+    Redirect,
     Pipeline,
     WordPart,
+    Statement,
+    CompoundList,
     DoubleQuotedPart,
-    DoubleQuotedChild,
-    Redirect
+    DoubleQuotedChild
 } from 'unbash';
 
 import type {
@@ -505,14 +507,13 @@ export class Bash implements BashInterpreter {
     // main function used by evaluate to call dedicated method for a given
     // AST Node type
     // -------------------------------------------------------------------------
-    protected dispatch(ast: Node): TypeOrPromise<void> {
-        const type = ast.type.toLowerCase();
+    protected dispatch(ast: Node): TypeOrPromise<unknown> {
         const bash = this as unknown as Record<string, unknown>;
+        const type = ast.type as string;
         if (typeof bash[type] === 'function') {
             return bash[type](ast);
-        } else {
-            throw new Error(`Unkown node '${type}'!`);
         }
+        throw new Error(`Unkown node '${type}'!`);
     }
 
     // -------------------------------------------------------------------------
@@ -640,26 +641,26 @@ export class Bash implements BashInterpreter {
     // in the pipe. This is handled by the Buffered Output and buffer swaping
     // by PipeInput/Output class.
     // -------------------------------------------------------------------------
-    protected async pipeline(ast: Pipeline) {
+    protected async Pipeline(ast: Pipeline) {
         const { stdin, stdout, stderr } = this._context;
         const commands = [...ast.commands];
         const output = new PipeOutput();
         this._context.stdout = output;
         while (commands.length > 1) {
             const command = commands.shift();
-            await this.command(command as Command, true);
+            await this.Command(command as Command, true);
             this._context.stdin = new PipeStdin(output.buffer);
             output.flush();
         }
         Object.assign(this._context, { stdout, stderr });
-        await this.command(commands.pop() as Command);
+        await this.Command(commands.pop() as Command);
         this._context.stdin = stdin;
     }
 
     // -------------------------------------------------------------------------
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
-    protected async command(ast: Command, pipe = false) {
+    protected async Command(ast: Command, pipe = false) {
         if (!ast.name) {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
@@ -702,11 +703,11 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected async andor(ast: AndOr) {
+    protected async AndOr(ast: AndOr) {
         let code;
         for (let i=0; i < ast.commands.length; ++i) {
             const command = ast.commands[i];
-            code = await this.command(command as Command);
+            code = await this.Command(command as Command);
             if (ast.operators[i]) {
                 const op = ast.operators[i];
                 if (op === '&&') {
@@ -724,7 +725,28 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected statement(ast: Statement) {
+    protected async CompoundList(ast: CompoundList) {
+        let code;
+        for (const statement of ast.commands) {
+            code = await this.dispatch(statement);
+        }
+        return code;
+    }
+
+    // -------------------------------------------------------------------------
+    protected async If(ast: If) {
+        const test = await this.dispatch(ast.clause) as number;
+        if (test === 0) {
+            if (ast.then) {
+                return await this.dispatch(ast.then)
+            }
+        } else if (ast.else) {
+            await this.dispatch(ast.else);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    protected Statement(ast: Statement) {
         return this.dispatch(ast.command);
     }
 }
