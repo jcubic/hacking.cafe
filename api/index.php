@@ -45,9 +45,10 @@ class Service extends RequestCache {
             'CACHE_TIME' => 48
         ));
         $fs = __DIR__ . '/fs.db';
+        $pristine = !is_file($fs);
         $this->fs_db = new PDO('sqlite:' . $fs);
         $this->fs_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        if (!is_file($fs)) {
+        if ($pristine) {
             $this->fs_db->exec('CREATE TABLE IF NOT EXISTS fs(
                                    name TEXT PRIMARY KEY,
                                    data BLOB
