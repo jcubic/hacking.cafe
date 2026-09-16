@@ -75,22 +75,6 @@ class BufferTerminalOutput extends BufferOutput {
     }
 }
 
-class BufferError extends BufferTerminalOutput {
-    flush() {
-        if (this._buffer.length) {
-            // escape formatting and xml and disable formatters
-            // becasue ANSI formatting unescapes the input
-            let output = $.terminal.escape_brackets(this.output());
-            output = output.replace(/>/g, '&gt;').replace(/</g, '&lt;');
-            this._term.echo(`[[;red;]${output}]`, {
-                newline: false,
-                formatters: false
-            });
-            this.clear();
-        }
-    }
-}
-
 class Input implements Stdin {
     protected _term: JQueryTerminal;
     constructor(term: JQueryTerminal) {
@@ -311,7 +295,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     term.option('completion', completion);
 
     const stdout = new BufferTerminalOutput(term);
-    const stderr = new BufferError(term);
+    const stderr = new BufferTerminalOutput(term);
     const stdin = new Input(term);
 
     const bash = new Bash(commands, {
