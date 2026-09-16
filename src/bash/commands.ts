@@ -36,6 +36,7 @@ import {
     file_date,
     format_bytes,
     is_permission,
+    escape,
     parse_mode
 } from './utils';
 
@@ -154,7 +155,7 @@ export async function cat(this: BashContext, ...args: string[]) {
         }
         content = files.join('');
     }
-    this.stdout.write(content);
+    this.stdout.write(escape(content));
 }
 
 // -----------------------------------------------------------------------------
@@ -281,4 +282,3 @@ export async function chmod(this: BashContext, ...args: string[]) {
         this.stdout.writeln('Usage: chmod mode files');
     }
 }
-

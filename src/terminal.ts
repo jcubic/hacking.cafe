@@ -20,6 +20,8 @@
 import jQuery from 'jquery';
 import terminal from 'jquery.terminal';
 
+export type { JQueryTerminal } from 'jquery.terminal';
+
 // @ts-expect-error
 import xml from 'jquery.terminal/js/xml_formatting.js';
 
@@ -40,7 +42,27 @@ pipe(window, $);
 unix(window, $);
 prism(window, $);
 
-export type JQueryTerminal = ReturnType<JQuery['terminal']>;
+
+// we rewrite jQuery Terminal formatters becasue main optiosn are no longer passed
+// to ansi formatting.
+const unixFormatting = {
+    unescape: false
+} as const;
+
+function options(formatter: any, unixFormatting: Record<string, unknown>) {
+    return (str: string, options: Record<string, unknown>) => {
+        return formatter(str, Object.assign(options, {
+            unixFormatting
+        }));
+    };
+}
+
+$.terminal.defaults.formatters = [
+    options($.terminal.overtyping, unixFormatting) as JQueryTerminal.Formatter,
+    options($.terminal.from_ansi, unixFormatting) as JQueryTerminal.Formatter,
+    $.terminal.xml_formatter,
+    $.terminal.nested_formatting
+];
 
 (globalThis as any).$ = $;
 

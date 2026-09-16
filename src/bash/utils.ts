@@ -279,6 +279,16 @@ export function parse_mode(str: string, mode: number): number {
     }, mode);
 }
 
+// -----------------------------------------------------------------------------
+// hepler function to prevent vite to preload the URL
+// -----------------------------------------------------------------------------
 export async function import_module(module: string) {
     return (await import(module)).default;
+}
+
+// -----------------------------------------------------------------------------
+export function escape(text: string) {
+    text = $.terminal.escape_brackets(text);
+    text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text;
 }
