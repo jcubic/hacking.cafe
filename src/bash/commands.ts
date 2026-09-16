@@ -36,7 +36,6 @@ import {
     file_date,
     format_bytes,
     is_permission,
-    escape,
     parse_mode
 } from './utils';
 
@@ -155,7 +154,7 @@ export async function cat(this: BashContext, ...args: string[]) {
         }
         content = files.join('');
     }
-    this.stdout.write(escape(content));
+    this.stdout.write(content);
 }
 
 // -----------------------------------------------------------------------------
