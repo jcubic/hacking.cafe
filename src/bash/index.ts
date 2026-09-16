@@ -107,12 +107,16 @@ class PipeOutput extends BufferOutput {
  * and return the content of that buffer when command reads the data
  */
 class PipeStdin implements Stdin {
-    protected _buffer: string[];
-    constructor(buffer: string[]) {
-        this._buffer = buffer;
+    protected _content: string;
+    constructor(arg: string[] | string) {
+        if (Array.isArray(arg)) {
+            this._content = arg.join('');
+        } else {
+            this._content = arg;
+        }
     }
     read() {
-        return this._buffer.join('');
+        return this._content;
     }
 }
 
@@ -315,14 +319,12 @@ export class Bash implements BashInterpreter {
         return result;
     }
 
-    
-
     // -------------------------------------------------------------------------
-    // parses bash prompt variable
+    // function parses bash prompt variable
     // -------------------------------------------------------------------------
     // example Ubuntu prompts:
-    // simple: PS1="\u@\h:\w\$ "
-    // color: PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+    // PS1="\u@\h:\w\$ "
+    // PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
     // -------------------------------------------------------------------------
     prompt() {
         let prompt;
@@ -484,13 +486,38 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected async redirect(ast: Redirect) {
+    // we split redirects becasue we have one method to handle all redirects
+    // but input redirects need to be called before the command and output
+    // redirect after the command
+    // -------------------------------------------------------------------------
+    protected split_redirects(ast: Command) {
+        const input: Redirect[] = [];
+        const output: Redirect[] = [];
+        for (const redirect of ast.redirects) {
+            if (redirect.target) {
+                switch (redirect.operator) {
+                    case '>':
+                        output.push(redirect);
+                        break;
+                    case '<':
+                        input.push(redirect);
+                        break;
+                }
+            }
+        }
+        return [input, output];
+    }
+
+    // -------------------------------------------------------------------------
+    // input direct must always call the callback that execute the comand
+    // -------------------------------------------------------------------------
+    protected async redirect(ast: Redirect, callback?: () => TypeOrPromise<void>) {
         if (ast.target) {
             switch (ast.operator) {
                 case '>': {
-                    const { fs, stdout, stderr, cwd } = this._context;
+                    const { fs, stdout, stderr } = this._context;
                     const file = ast.target.value;
-                    const fullname = path.resolve(cwd, file);
+                    const fullname = this.resolve_path(file);
                     let content;
                     if (ast.fileDescriptor === 2) {
                         content = stderr.output();
@@ -502,6 +529,20 @@ export class Bash implements BashInterpreter {
                     await fs.writeFile(fullname, content);
                     break;
                 }
+                case '<': {
+                    const { fs, stdin } = this._context;
+                    const file = ast.target.value;
+                    const fullname = this.resolve_path(file);
+                    const content = await fs.readFile(fullname, 'utf8');
+                    this._context.stdin = new PipeStdin(content);
+                    if (callback) {
+                        await callback();
+                    }
+                    this._context.stdin = stdin;
+                    break;
+                }
+                default:
+                    throw new Error(`Redirect ${ast.operator} not supported`);
             }
         }
     }
@@ -606,9 +647,19 @@ export class Bash implements BashInterpreter {
             throw new Error(`Invalid value '${ast.name}'`);
         }
         const args = this.suffix(ast.suffix) as string[];
-        const code = await this.exec(command, ...args);
-        if (ast.redirects.length) {
-            for (const redirect of ast.redirects) {
+        const [input_redir, output_redir] = this.split_redirects(ast);
+        let code;
+        if (input_redir.length) {
+            for (const redirect of input_redir) {
+                await this.redirect(redirect, async () => {
+                    code = await this.exec(command, ...args);
+                });
+            }
+        } else {
+            code = await this.exec(command, ...args);
+        }
+        if (output_redir.length) {
+            for (const redirect of output_redir) {
                 await this.redirect(redirect);
             }
         }
