@@ -85,13 +85,14 @@ export interface BashInterpreter {
     get host(): string;
     get cwd(): string;
     set cwd(dir: string);
+    fork(): BashInterpreter;
     init(): Promise<void>;
     setup(): Promise<void>;
     users(): Promise<UserData[]>;
     executables(dir: string): Promise<string[]>;
     resolve_path(path: string): string;
     prompt(string: string): string;
-    evaluate(code: string): TypeOrPromise<unknown>;
+    evaluate(code: string): TypeOrPromise<number>;
     command_exists(command: any): command is keyof Commands;
     exec(command: string, ...args: string[]): ReturnType<BashCommand>;
     variable(name: string): Variable | undefined | never;

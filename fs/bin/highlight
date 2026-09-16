@@ -1,3 +1,5 @@
+#!/bin/js
+
 const stdout = require('stdout');
 const fs = require('fs');
 const stdin = require('stdin');

@@ -176,10 +176,65 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    get host() {
+        return this._context.host;
+    }
+
+    // -------------------------------------------------------------------------
+    get user() {
+        return this._context.user;
+    }
+
+    // -------------------------------------------------------------------------
+    get home() {
+        return this._context.home;
+    }
+
+    // -------------------------------------------------------------------------
+    get fs() {
+        return this._context.fs;
+    }
+
+    // -------------------------------------------------------------------------
+    get cwd() {
+        return this._context.cwd;
+    }
+    set cwd(dir: string) {
+        this._context.cwd = dir;
+    }
+
+    // -------------------------------------------------------------------------
     // hack to fix Vite module preloading
     // -------------------------------------------------------------------------
     private async _import(module: string) {
         return await import_module(`https://esm.sh/${module}`);
+    }
+
+    // -------------------------------------------------------------------------
+    // spin a new Bash instance to run script as a new proccess, so environment
+    // like variables are not modified by the script
+    // -------------------------------------------------------------------------
+    public fork() {
+        const {
+            stdout,
+            stderr,
+            stdin,
+            fs,
+            home,
+            user,
+            host
+        } = this._context;
+        const bash = new Bash(this._commands, {
+            stdout,
+            stderr,
+            stdin,
+            fs,
+            user,
+            host,
+            home
+        });
+        bash.cwd = this.cwd;
+        return bash;
     }
 
     // -------------------------------------------------------------------------
@@ -238,18 +293,32 @@ export class Bash implements BashInterpreter {
     // the file always exist and is executable when this function is called
     // -------------------------------------------------------------------------
     private async script(filename: string, ...args: string[]): Promise<number> {
-        const file = await this.fs.readFile(filename, 'utf8');
-        const code = await this._process(file, args);
-        const blob = new Blob([code], { type: 'application/javascript' });
-        const worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
-        return new Promise((resolve) => {
-            worker.addEventListener('message', message => {
-                if ('exit' in message.data) {
-                    const code = message.data.exit;
-                    resolve(code);
-                }
-            });
-        });
+        let file = await this.fs.readFile(filename, 'utf8');
+        const re = /^#!(.+)\n/;
+        const shebang = file.match(re);
+        if (shebang) {
+            const interpreter = shebang[1];
+            file = file.replace(re, '');
+            if (interpreter === '/bin/js') {
+                const code = await this._process(file, args);
+                const blob = new Blob([code], {
+                    type: 'application/javascript'
+                });
+                const worker = new Worker(URL.createObjectURL(blob), {
+                    type: 'module'
+                });
+                return new Promise((resolve) => {
+                    worker.addEventListener('message', message => {
+                        if ('exit' in message.data) {
+                            const code = message.data.exit;
+                            resolve(code);
+                        }
+                    });
+                });
+            }
+        }
+        const bash = this.fork();
+        return bash.evaluate(file);
     }
 
     // -------------------------------------------------------------------------
@@ -376,34 +445,6 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    get host() {
-        return this._context.host;
-    }
-
-    // -------------------------------------------------------------------------
-    get user() {
-        return this._context.user;
-    }
-
-    // -------------------------------------------------------------------------
-    get home() {
-        return this._context.home;
-    }
-
-    // -------------------------------------------------------------------------
-    get fs() {
-        return this._context.fs;
-    }
-
-    // -------------------------------------------------------------------------
-    get cwd() {
-        return this._context.cwd;
-    }
-    set cwd(dir: string) {
-        this._context.cwd = dir;
-    }
-
-    // -------------------------------------------------------------------------
     public executables(dir: string) {
         return list_executables(this.fs, dir);
     }
@@ -487,7 +528,7 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     // main entry point for executing Bash code
     // -------------------------------------------------------------------------
-    public async evaluate(code: string) {
+    public async evaluate(code: string): Promise<number> {
         if (code.trim()) {
             const ast = parse(code);
 
@@ -499,8 +540,9 @@ export class Bash implements BashInterpreter {
             for (const command of ast.commands) {
                 result = await this.dispatch(command);
             }
-            return result;
+            return typeof result === 'number' ? result : 0;
         }
+        return 0;
     }
 
     // -------------------------------------------------------------------------
