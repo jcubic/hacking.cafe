@@ -174,8 +174,8 @@ export function pwd(this: BashContext) {
 }
 
 // ---------------------------------------------------------------------
+// @ts-expect-error
 function long_ls(context: BashContext, stat: Stats) {
-    console.log({ context, stat });
     return [
         mode_to_string(stat.mode),
         format_bytes(stat.size).padStart(4, ' '),
