@@ -197,6 +197,13 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // read only copy of internal env
+    // -------------------------------------------------------------------------
+    get env() {
+        return Object.assign(Object.create(null), this._env);
+    }
+
+    // -------------------------------------------------------------------------
     get cwd() {
         return this._context.cwd;
     }
@@ -234,6 +241,9 @@ export class Bash implements BashInterpreter {
             host,
             home
         });
+        // we need to inherit the state of parent bash
+        // we set interal env using public read only getter
+        bash._env = this.env;
         bash.cwd = this.cwd;
         return bash;
     }

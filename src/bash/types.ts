@@ -83,6 +83,7 @@ export interface BashInterpreter {
     get home(): string;
     get user(): string;
     get host(): string;
+    get env(): Environment;
     get cwd(): string;
     set cwd(dir: string);
     fork(): BashInterpreter;
