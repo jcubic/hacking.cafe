@@ -20,9 +20,8 @@
  *
  */
 import parse_options from '@jcubic/lily';
-
 import path from 'path-browserify';
-
+import { vsprintf } from 'sprintf-js';
 import { fs_constants } from './constants';
 
 import type { BashContext, Stats, UserData } from './types';
@@ -426,4 +425,79 @@ export async function test(this: BashContext, ...args: string[]) {
         }
     }
     throw new Error('Unkown operator');
+}
+
+// -----------------------------------------------------------------------------
+function unicode(str: string) {
+    return String.fromCodePoint(parseInt(str, 16));
+}
+
+// -----------------------------------------------------------------------------
+function unescape(str: string) {
+    const re = /\\([\\ntbe"]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2}|u[0-9a-zA-Z]{4}|U[0-9a-zA-Z]{8})/g
+    return str.replace(re, (_, str: string) => {
+        switch (str[0]) {
+            case '"':
+                return '"';
+            case '\\':
+                return '\\';
+            case 'n':
+                return '\n';
+            case 'b':
+                return '\b';
+            case 't':
+                return '\t';
+            case 'u':
+                return unicode(str.substring(1));
+            case 'U':
+                return unicode(str.substring(1));
+            case 'e':
+                return char(0x1b);
+            case '0':
+                return char(parseInt(str.substring(1), 8));
+            case 'x':
+                return char(parseInt(str.substring(1), 16));
+        }
+        if (str[0].match(/[0-9]/)) {
+            return char(parseInt(str.substring(1), 8));
+        }
+        return '';
+    });
+}
+
+// -----------------------------------------------------------------------------
+export async function printf(this: BashContext, ...args: string[]) {
+    if (args.length === 0) {
+        this.stderr.write("bash: printf: usage: printf [-v var] format [arguments]\n");
+        return 2;
+    }
+
+    const format = unescape(args.shift() as string);
+    const count = (format.match(/%[^%]/g) || []).length;
+
+    if (count === 0) {
+        this.stdout.write(format);
+        return 0;
+    }
+
+    let i = 0;
+    while (i < args.length || i === 0) {
+        const chunk = args.slice(i, i + count);
+        while (chunk.length < count) {
+            chunk.push("");
+        }
+        try {
+            const result = vsprintf(format, chunk);
+            this.stdout.write(result);
+        } catch (err) {
+            this.stderr.write(`bash: printf: formatting error: ${(err as Error).message}\n`);
+            return 1;
+        }
+
+        i += count;
+        if (args.length === 0) {
+            break;
+        }
+    }
+    return 0;
 }

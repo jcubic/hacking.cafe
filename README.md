@@ -47,7 +47,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `test` command
 - [ ] aliases and functions
 - [ ] order: keywords => aliases => function => builtins => executables
-- [ ] `printf`
+- [x] `printf`
 - [ ] `pushd`/`popd`
 - [x] `while`, `until`
 - [ ] `for`
