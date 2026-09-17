@@ -150,10 +150,7 @@ export async function cat(this: BashContext, ...args: string[]) {
                 break;
             }
             this.stdout.write(line);
-            // we use buffered output we need to flush but not when using pipe
-            if (!this.bash.is_pipe) {
-                this.stdout.flush();
-            }
+            this.stdout.flush();
         }
     } else {
         const files = [];

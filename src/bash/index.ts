@@ -628,6 +628,7 @@ export class Bash implements BashInterpreter {
             switch (ast.operator) {
                 case '>': {
                     const { fs, stdout, stderr } = this._context;
+                    // TODO: resolve ast.target
                     const file = ast.target.value;
                     const fullname = this.resolve_path(file);
                     let content;
@@ -638,11 +639,13 @@ export class Bash implements BashInterpreter {
                         content = stdout.output();
                         stdout.clear();
                     }
+                    console.log({ content });
                     await fs.writeFile(fullname, content);
                     break;
                 }
                 case '<': {
                     const { fs, stdin } = this._context;
+                    // TODO: resolve ast.target
                     const file = ast.target.value;
                     const fullname = this.resolve_path(file);
                     const content = await fs.readFile(fullname, 'utf8');
@@ -960,6 +963,7 @@ export class Bash implements BashInterpreter {
         }
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
+        const { stdout, stderr } = this._context;
         if (input_redir.length) {
             for (const redirect of input_redir) {
                 await this.redirect(redirect, async () => {
@@ -967,12 +971,18 @@ export class Bash implements BashInterpreter {
                 });
             }
         } else {
+            if (output_redir.length) {
+                this._context.stdout = new SilientOutput();
+                this._context.stderr = new SilientOutput();
+            }
             code = await this.exec(command, ...args);
         }
         if (output_redir.length) {
             for (const redirect of output_redir) {
                 await this.redirect(redirect);
             }
+            this._context.stderr = stderr;
+            this._context.stdout = stdout;
         }
         if (!this._pipe) {
             const { stdout, stderr } = this._context;
