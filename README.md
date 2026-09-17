@@ -22,10 +22,12 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x]: JavaScript programs using web workers
 - [x]: Bash scripts and shebang
 - [ ]: variable expansions:
-  - [ ]: `${VAR:-default}`
   - [ ]: `${DATABASE_URL:="localhost"}`
   - [ ]: `USER_ID=${1:?"Error, arg missing!"}`
-  - [ ]: `${var:+alternative}`
+  - [x]: `${VAR:-default}`
+  - [x]: `${VAR-default}`
+  - [x]: `${var+alternative}`
+  - [x]: `${var:+alternative}`
   - [x]: `${VAR/x/y}` - replace
   - [x]: `${VAR//x/y}` - replace all
   - [ ]: `${TEXT:4}` `${TEXT:0:4}` - substring

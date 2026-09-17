@@ -734,6 +734,43 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    protected async use_default(ast: ParameterExpansionPart, strict: boolean) {
+        if (ast.operand) {
+            let variable;
+            try {
+                variable = this.variable('$' + ast.parameter);
+                if (strict && !variable) {
+                    return '';
+                }
+            } catch(e) {
+                // ignore
+            }
+            if (ast.operand && !variable) {
+                return await this.resolve(ast.operand);
+            }
+        }
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
+    protected async use_alternative(ast: ParameterExpansionPart, strict: boolean) {
+        if (ast.operand) {
+            try {
+                const variable = this.variable('$' + ast.parameter);
+                if (!variable && !strict) {
+                    return '';
+                }
+                if (ast.operand) {
+                    return await this.resolve(ast.operand);
+                }
+            } catch(e) {
+                // ignore
+            }
+        }
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
     protected async expansion(ast: ParameterExpansionPart) {
         if (ast.operator) {
             switch (ast.operator) {
@@ -753,6 +790,14 @@ export class Bash implements BashInterpreter {
                     return this.trim(ast, false, false);
                 case '%%':
                     return this.trim(ast, false, true);
+                case '-':
+                    return this.use_default(ast, true);
+                case ':-':
+                    return this.use_default(ast, false);
+                case '+':
+                    return this.use_alternative(ast, true);
+                case ':+':
+                    return this.use_alternative(ast, false);
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }
