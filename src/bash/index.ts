@@ -851,6 +851,13 @@ export class Bash implements BashInterpreter {
         if (ast.indirect) {
             return this.variable('$' + variable);
         }
+        if (ast.slice) {
+            const offset = parseInt(await this.resolve(ast.slice.offset), 10);
+            const length = ast.slice.length ?
+                parseInt(await this.resolve(ast.slice.length), 10) + offset:
+                undefined;
+            return variable.toString().substring(offset, length);
+        }
         return variable;
     }
 

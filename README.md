@@ -30,7 +30,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x]: `${var:+alternative}`
   - [x]: `${VAR/x/y}` - replace
   - [x]: `${VAR//x/y}` - replace all
-  - [ ]: `${TEXT:4}` `${TEXT:0:4}` - substring
+  - [x]: `${TEXT:4}` `${TEXT:0:4}` - slice
   - [x]: `${FILE%.*}` - remove traling non-greedy
   - [x]: `${PATH%%:*}` remove traling greedy
   - [x]: `${PATH##*/}` - remove greedy before
