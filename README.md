@@ -53,8 +53,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] `for`
 - [x] `while read line`
 - [ ] `case esac`
-- [ ] `$0`-`$9`
-- [ ] `$@` / `$*` / `$#`
+- [x] `$0`-`$9`
+- [x] `$@` / `$*` / `$#`
 - [x] `read -p "contunue? (y/n) "`
 - [ ] history
 - [ ] export / unset
@@ -64,6 +64,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 Bash expact aliases before processing keyboards, which allows changing syntax. By design
 Hacking Cafe will only expand aliases as commands.
+
+`$@` works the same as `"$@"`.
 
 ## Commercial License
 

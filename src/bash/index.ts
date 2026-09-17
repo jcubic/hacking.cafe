@@ -166,12 +166,16 @@ export class Bash implements BashInterpreter {
     } as const;
     // indicator to not flush the output in Command
     private _pipe: boolean;
+    private _args: string[];
+    private _name: string;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { cwd: context.home, bash: this, ...context };
         this._env = Object.create(null);
         this._channel = new BroadcastChannel('__ipc__');
         this._pipe = false;
+        this._args = [];
+        this._name = 'bash';
         this._modules = {
             fs: () => this.fs,
             bash: () => this,
@@ -355,6 +359,9 @@ export class Bash implements BashInterpreter {
             }
         }
         const bash = this.fork();
+        const name = path.basename(filename);
+        bash._name = name;
+        bash._args = args;
         return bash.evaluate(file);
     }
 
@@ -550,6 +557,19 @@ export class Bash implements BashInterpreter {
         if (Object.hasOwn(this._env, name)) {
             return this._env[name];
         }
+        if (name === '$0') {
+            return this._name;
+        }
+        if (name === '$*') {
+            return this._args.join(' ');
+        }
+        if (name === '$#') {
+            return this._args.length.toString();
+        }
+        if (name.match(/\$[0-9]+/)) {
+            const index = parseInt(name.substring(1), 10);
+            return this._args[index - 1] ?? '';
+        }
         throw new Error(`Undefined variable ${name}`);
     }
 
@@ -639,7 +659,6 @@ export class Bash implements BashInterpreter {
                         content = stdout.output();
                         stdout.clear();
                     }
-                    console.log({ content });
                     await fs.writeFile(fullname, content);
                     break;
                 }
@@ -686,6 +705,9 @@ export class Bash implements BashInterpreter {
                 return ast.value;
             case 'SimpleExpansion': {
                 const value = ast.text;
+                if (value.match(/\$@/)) {
+                    return value;
+                }
                 if (value.startsWith('$')) {
                     return this.get_variable(value);
                 }
@@ -933,6 +955,33 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // argument wrapper that resolve special bash $@ operator
+    // -------------------------------------------------------------------------
+    protected async args(ast: Command) {
+        const args = await this.words(ast.suffix);
+        return args.reduce((result: string[], item: Variable) => {
+            item = item.toString();
+            if (item.match(/\$@/)) {
+                if (item === '$@') {
+                    return result.concat(this._args);
+                }
+                const [prefix, suffix] = item.split('$@');
+                if (this._args.length <= 1) {
+                    result.push(prefix + (this._args[0] ?? '') + suffix);
+                    return result;
+                } else {
+                    const first = prefix + this._args[0];
+                    const last = this._args.at(-1) + suffix;
+                    const rest = this._args.slice(1, -1);
+                    return result.concat([first], rest, [last]);
+                }
+            }
+            result.push(item);
+            return result;
+        }, []);
+    }
+
+    // -------------------------------------------------------------------------
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
     protected async Command(ast: Command) {
@@ -953,7 +1002,7 @@ export class Bash implements BashInterpreter {
         if (typeof command !== 'string') {
             throw new Error(`Invalid value '${ast.name}'`);
         }
-        const args = (await this.words(ast.suffix)) as string[];
+        const args = await this.args(ast);
         if (command === '[') {
             if (args.at(-1) !== ']') {
                 throw new Error("bash: [: missing `]'");
