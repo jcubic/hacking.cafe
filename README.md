@@ -58,7 +58,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `read -p "contunue? (y/n) "`
 - [ ] history
 - [x] export
-- [ ] unset
+- [x] unset
 - [ ] completion
 
 ## Limitations

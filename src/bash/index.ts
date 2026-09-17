@@ -80,12 +80,6 @@ export { BufferOutput };
 
 type ReplaceCallback = (pattern: string) => RegExp;
 
-/*
- * Bash class is more like a Unix system
- *
- * TODO: separate bash parser from Unix like behavior
- *
- */
 export class Bash implements BashInterpreter {
     // object containing builtin and user commands
     private _commands: Commands;
@@ -344,16 +338,7 @@ export class Bash implements BashInterpreter {
     // PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
     // -------------------------------------------------------------------------
     prompt() {
-        let prompt;
-        try {
-            prompt = this.get_variable('$PS1');
-        } catch (e) {
-            // ignore
-        } finally {
-            if (typeof prompt !== 'string') {
-                prompt = '\\$ ';
-            }
-        }
+        const prompt = this.get_variable('$PS1') as string || '\\$ ';
         return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
             if (seq.match(/^[0-7]+$/)) {
                 return char(parseInt(seq, 8));
@@ -476,7 +461,7 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    public get_variable(name: string) {
+    public get_variable(name: string): Variable {
         if (Object.hasOwn(this._locals, name)) {
             return this._locals[name];
         }
@@ -496,7 +481,7 @@ export class Bash implements BashInterpreter {
             const index = parseInt(name.substring(1), 10);
             return this._args[index - 1] ?? '';
         }
-        throw new Error(`Undefined variable ${name}`);
+        return '';
     }
 
     // -------------------------------------------------------------------------
