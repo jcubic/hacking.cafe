@@ -288,6 +288,25 @@ export async function chmod(this: BashContext, ...args: string[]) {
 }
 
 // -----------------------------------------------------------------------------
+export async function ln(this: BashContext, ...args: string[]) {
+    const options = parse_options(args, { boolean: ['s'] });
+    if (!options.s) {
+        throw new Error('hardlinks not supported');
+    }
+    if (options._.length === 2) {
+        const [target, name] = options._.map((name: string) => {
+            return this.bash.resolve_path(name);
+        });
+        try {
+            await this.fs.symlink(target, name);
+            return 0;
+        } catch(e) {
+            return 1;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 export async function read(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (typeof options.p === 'string') {
