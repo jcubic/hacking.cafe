@@ -58,6 +58,8 @@ import type {
 
 import { fs_constants } from './constants';
 
+import proceess_wrapper from './process.js?raw';
+
 import * as builtins from './commands';
 
 import { date, char, import_module, list_executables, glob_to_regex } from './utils';
@@ -158,9 +160,6 @@ export class Bash implements BashInterpreter {
     private _channel: BroadcastChannel;
     // list of exposed modules for the webworker process
     private _modules: Record<string, () => Module>;
-    // function that wraps user script with exact code that invoke the main
-    // function and expose modules into via _channel RPC like mechanism
-    private _process: (code: string, args: string[]) => Promise<string>;
     private _shorcuts = {
         '.': 'source'
     } as const;
@@ -186,14 +185,6 @@ export class Bash implements BashInterpreter {
             '$.terminal': () => $.terminal as unknown as Module
         };
         this.init_ipc_channel();
-        // we can't use await in contructor but we want to initalize
-        // all the fields
-        const promise = fetch('./process.js').then(res => res.text());
-        this._process = async (code, args = []) => {
-            const wrapper = await promise;
-            const _args = JSON.stringify(args)
-            return wrapper.replace('{{ARGS}}', _args).replace('{{CODE}}', code);
-        };
     }
 
     // -------------------------------------------------------------------------
@@ -279,6 +270,15 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // we need to add aditional code to the worker scripts for them to work
+    // -------------------------------------------------------------------------
+    private process(code: string, args: string[] = []) {
+        const _args = JSON.stringify(args)
+        return proceess_wrapper.replace('{{ARGS}}', _args)
+            .replace('{{CODE}}', code);
+    }
+
+    // -------------------------------------------------------------------------
     // boroadcast channel for communication with web worker scripts
     // it exposes modules via RPC-like mechanizm using Proxy objects
     // inside prefix scripts added by this._process() the modules
@@ -341,7 +341,7 @@ export class Bash implements BashInterpreter {
             const interpreter = shebang[1];
             file = file.replace(re, '');
             if (interpreter === '/bin/js') {
-                const code = await this._process(file, args);
+                const code = this.process(file, args);
                 const blob = new Blob([code], {
                     type: 'application/javascript'
                 });
