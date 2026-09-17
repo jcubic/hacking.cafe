@@ -322,7 +322,8 @@ export async function ln(this: BashContext, ...args: string[]) {
 export async function read(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (typeof options.p === 'string') {
-        this.stdout.write(options.p);
+        this.stderr.write(options.p);
+        this.stderr.flush();
     }
     let input = await this.stdin.read_line();
     if (input === null) {
