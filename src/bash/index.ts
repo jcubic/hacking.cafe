@@ -21,6 +21,7 @@
  */
 import { parse } from 'unbash';
 import path from 'path-browserify';
+import parse_options from '@jcubic/lily';
 
 import type {
     If,
@@ -89,8 +90,8 @@ export class Bash implements BashInterpreter {
     // object containing builtin and user commands
     private _commands: Commands;
     // env contain variables defined in Bash
-    private _global: Environment;
-    private _local: Environment;
+    private _globals: Environment;
+    private _locals: Environment;
     // context is object that is passed to builtin commands as this
     private _context: BashContext;
     // BroadcastChannel is used to access modules from inside web worker process
@@ -108,8 +109,8 @@ export class Bash implements BashInterpreter {
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { ...context, cwd: context.home, bash: this };
-        this._global = Object.create(null);
-        this._local = Object.create(null);
+        this._globals = Object.create(null);
+        this._locals = Object.create(null);
         this._channel = new BroadcastChannel('__ipc__');
         this._pipe = this._export = false;
         this._args = [];
@@ -160,7 +161,7 @@ export class Bash implements BashInterpreter {
     // read only copy of internal env
     // -------------------------------------------------------------------------
     get env() {
-        return Object.assign(Object.create(null), this._global);
+        return Object.assign(Object.create(null), this._globals);
     }
 
     // -------------------------------------------------------------------------
@@ -186,7 +187,7 @@ export class Bash implements BashInterpreter {
         const bash = new Bash(this._commands, this._context);
         // we need to inherit the state of parent bash
         // we set interal env using public read only getter
-        bash._global = this.env;
+        bash._globals = this.env;
         bash.cwd = this.cwd;
         return bash;
     }
@@ -476,11 +477,11 @@ export class Bash implements BashInterpreter {
 
     // -------------------------------------------------------------------------
     public get_variable(name: string) {
-        if (Object.hasOwn(this._local, name)) {
-            return this._local[name];
+        if (Object.hasOwn(this._locals, name)) {
+            return this._locals[name];
         }
-        if (Object.hasOwn(this._global, name)) {
-            return this._global[name];
+        if (Object.hasOwn(this._globals, name)) {
+            return this._globals[name];
         }
         if (name === '$0') {
             return this._name;
@@ -501,9 +502,9 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     public set_variable(name: string, value: Variable) {
         if (this._export) {
-            this._global[name] = value;
+            this._globals[name] = value;
         } else {
-            this._local[name] = value;
+            this._locals[name] = value;
         }
     }
 
@@ -911,15 +912,30 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    // we need to parse arguments becasue unbash doesn't parse
-    // export properly see: webpro-nl/unbash#12
+    // commands that require access to internal state of the interpreter
     // -------------------------------------------------------------------------
-    private async export(args: string[]) {
+    protected async builtin_export(args: string[]) {
         this._export = true;
         for (const variable of args) {
+            // Unbash parses export as command so we need to parse again
+            // see: webpro-nl/unbash#12
             await this.evaluate(variable);
         }
         this._export = false;
+        return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    protected async builtin_unset(args: string[]) {
+        const options = parse_options(args, { boolean: ['v', 'f'] });
+        if (options.f) {
+            // delete function
+        } else {
+            for (const variable of options._) {
+                delete this._globals['$' + variable];
+                delete this._locals['$' + variable];
+            }
+        }
         return 0;
     }
 
@@ -952,8 +968,9 @@ export class Bash implements BashInterpreter {
             args.pop();
             command = 'test';
         }
-        if (command === 'export') {
-            return this.export(args);
+        const builtin = ('builtin_' + command) as keyof BashInterpreter;
+        if (typeof this[builtin] === 'function') {
+            return this[builtin](args);
         }
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
