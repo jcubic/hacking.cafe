@@ -9,54 +9,54 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 ## TODO
 
-- [x]: `~/.bashrc` and `/etc/bashrc` files
-- [x]: `$PS1` variable
-- [x]: `$PATH` variable
-- [x]: subshells
-- [x]: If statements
-- [x]: and/or expressions
-- [x]: double-quote expressions
-- [x]: variable assignments
-- [x]: pipes
-- [x]: redirects (`>` and `<`)
-- [x]: JavaScript programs using web workers
-- [x]: Bash scripts and shebang
-- [x]: variable expansions:
-  - [x]: `${DATABASE_URL:="localhost"}`
-  - [x]: `USER_ID=${1:?"Error, arg missing!"}`
-  - [x]: `${VAR:-default}`
-  - [x]: `${VAR-default}`
-  - [x]: `${var+alternative}`
-  - [x]: `${var:+alternative}`
-  - [x]: `${VAR/x/y}` - replace
-  - [x]: `${VAR//x/y}` - replace all
-  - [x]: `${TEXT:4}` `${TEXT:0:4}` - slice
-  - [x]: `${FILE%.*}` - remove traling non-greedy
-  - [x]: `${PATH%%:*}` remove traling greedy
-  - [x]: `${PATH##*/}` - remove greedy before
-  - [x]: `EXTENSION=${FILE#*.}` - remove before
-  - [x]: `${NAME^}` - camel case
-  - [x]: `${NAME^^}` - upper case
-  - [x]: `LEN=${#NAME}` - string length
-  - [x]: `${!POINTER}` - indirect variable
-- [ ]: run in background `&` (bash in worker?)
-- [ ]: process substitution `<(command)` and `>(command)`
-- [ ]: extract commands like `cat` or `grep` into scripts in `/bin`
-- [ ]: glob patterns
-- [ ]: `test` command
-- [ ]: aliases and functions
-- [ ]: order: keywords => aliases => function => builtins => executables
-- [ ]: `printf`
-- [ ]: `pushd`/`popd`
-- [ ]: `for`, `while`, `until`
-- [ ]: `while read line`
-- [ ]: `case esac`
-- [ ]: `$0`-`$9`
-- [ ]: `$@` / `$*` / `$#`
-- [ ]: `read -p "contunue? (y/n) "`
-- [ ]: history
-- [ ]: export / unset
-- [ ]: completion
+- [x] `~/.bashrc` and `/etc/bashrc` files
+- [x] `$PS1` variable
+- [x] `$PATH` variable
+- [x] subshells
+- [x] If statements
+- [x] and/or expressions
+- [x] double-quote expressions
+- [x] variable assignments
+- [x] pipes
+- [x] redirects (`>` and `<`)
+- [x] JavaScript programs using web workers
+- [x] Bash scripts and shebang
+- [x] variable expansions:
+  - [x] `${DATABASE_URL:="localhost"}`
+  - [x] `USER_ID=${1:?"Error, arg missing!"}`
+  - [x] `${VAR:-default}`
+  - [x] `${VAR-default}`
+  - [x] `${var+alternative}`
+  - [x] `${var:+alternative}`
+  - [x] `${VAR/x/y}` - replace
+  - [x] `${VAR//x/y}` - replace all
+  - [x] `${TEXT:4}` `${TEXT:0:4}` - slice
+  - [x] `${FILE%.*}` - remove traling non-greedy
+  - [x] `${PATH%%:*}` remove traling greedy
+  - [x] `${PATH##*/}` - remove greedy before
+  - [x] `EXTENSION=${FILE#*.}` - remove before
+  - [x] `${NAME^}` - camel case
+  - [x] `${NAME^^}` - upper case
+  - [x] `LEN=${#NAME}` - string length
+  - [x] `${!POINTER}` - indirect variable
+- [ ] run in background `&` (bash in worker?)
+- [ ] process substitution `<(command)` and `>(command)`
+- [ ] extract commands like `cat` or `grep` into scripts in `/bin`
+- [ ] glob patterns
+- [ ] `test` command
+- [ ] aliases and functions
+- [ ] order: keywords => aliases => function => builtins => executables
+- [ ] `printf`
+- [ ] `pushd`/`popd`
+- [ ] `for`, `while`, `until`
+- [ ] `while read line`
+- [ ] `case esac`
+- [ ] `$0`-`$9`
+- [ ] `$@` / `$*` / `$#`
+- [ ] `read -p "contunue? (y/n) "`
+- [ ] history
+- [ ] export / unset
+- [ ] completion
 
 ## Limitations
 
