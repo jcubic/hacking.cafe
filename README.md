@@ -9,6 +9,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 ## TODO
 
+### Bash
+
 - [x] `~/.bashrc` and `/etc/bashrc` files
 - [x] `$PS1` variable
 - [x] `$PATH` variable
@@ -62,6 +64,14 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] export
 - [x] unset
 - [ ] completion
+
+### Unix
+
+- [ ] `env` command
+- [ ] script fs as REPL
+  - [ ] `/bin/js` repl and interpreter
+  - [ ] `/bin/bash` as subshell
+
 
 ## Limitations
 

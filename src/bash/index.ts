@@ -83,9 +83,12 @@ type ReplaceCallback = (pattern: string) => RegExp;
 export class Bash implements BashInterpreter {
     // object containing builtin and user commands
     private _commands: Commands;
-    // env contain variables defined in Bash
+    // globals are variables with export
     private _globals: Environment;
+    // locals are without
     private _locals: Environment;
+    // temporary variables for new process
+    private _tmp_env: Environment;
     // context is object that is passed to builtin commands as this
     private _context: BashContext;
     // BroadcastChannel is used to access modules from inside web worker process
@@ -98,6 +101,7 @@ export class Bash implements BashInterpreter {
     // indicator to not flush the output in Command
     private _pipe: boolean;
     private _export: boolean;
+    private _tmp: boolean;
     private _args: string[];
     private _name: string;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
@@ -105,8 +109,9 @@ export class Bash implements BashInterpreter {
         this._context = { ...context, cwd: context.home, bash: this };
         this._globals = Object.create(null);
         this._locals = Object.create(null);
+        this._tmp_env = Object.create(null);
         this._channel = new BroadcastChannel('__ipc__');
-        this._pipe = this._export = false;
+        this._pipe = this._export = this._tmp = false;
         this._args = [];
         this._name = 'bash';
         this._modules = {
@@ -129,6 +134,11 @@ export class Bash implements BashInterpreter {
 
     get commands() {
         return Object.keys(this._commands);
+    }
+
+    // -------------------------------------------------------------------------
+    protected get temp_vars() {
+        return this._tmp_env;
     }
 
     // -------------------------------------------------------------------------
@@ -277,6 +287,7 @@ export class Bash implements BashInterpreter {
         }
         const bash = this.fork();
         const name = path.basename(filename);
+        Object.assign(bash._globals, this._tmp_env);
         bash._name = name;
         bash._args = args;
         return bash.evaluate(file);
@@ -433,9 +444,14 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    public async exec(command: string, ...args: string[]): Promise<number | void> {
+    public async exec(command: string, ...args: string[]): Promise<number> {
         if (this.command_exists(command)) {
-            return this._commands[command].apply(this._context, args);
+            const fn = this._commands[command];
+            const code = await fn.apply(this._context, args);
+            if (typeof code === 'number') {
+                return code;
+            }
+            return 0;
         } else {
             const filename = await this.find_name(command as any);
             if (!filename) {
@@ -454,7 +470,7 @@ export class Bash implements BashInterpreter {
                 code = await this.exec_script(filename, ...args);
             } catch(e) {
                 this._context.stderr.writeln((e as Error).message);
-                return 1;
+                code = 1;
             }
             return code;
         }
@@ -489,11 +505,20 @@ export class Bash implements BashInterpreter {
 
     // -------------------------------------------------------------------------
     public set_variable(name: string, value: Variable) {
-        if (this._export) {
+        if (this._tmp) {
+            this._tmp_env[name] = value;
+        } else if (this._export) {
             this._globals[name] = value;
         } else {
             this._locals[name] = value;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    protected async with_temp_vars(callback: () => TypeOrPromise<void>) {
+        this._tmp = true;
+        await callback();
+        this._tmp = false;
     }
 
     // -------------------------------------------------------------------------
@@ -931,13 +956,18 @@ export class Bash implements BashInterpreter {
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
     protected async Command(ast: Command) {
-        if (!ast.name) {
-            if (ast.prefix.length) {
+        if (ast.prefix.length) {
+            await this.with_temp_vars(async () => {
                 const [ prefix ] = ast.prefix;
                 if (prefix.type === 'Assignment' && prefix.value) {
                     const value = await this.resolve(prefix.value);
                     this.set_variable('$' + prefix.name, value);
                 }
+            });
+        }
+        if (!ast.name) {
+            for (const [key, value] of Object.entries(this.temp_vars)) {
+                this.set_variable(key, value);
             }
             return 0;
         }
@@ -957,7 +987,7 @@ export class Bash implements BashInterpreter {
             command = 'test';
         }
         const builtin = ('builtin_' + command) as keyof BashInterpreter;
-        let code;
+        let code = 0;
         try {
             if (typeof this[builtin] === 'function') {
                 return this[builtin](args);
@@ -993,7 +1023,8 @@ export class Bash implements BashInterpreter {
             stderr.flush();
             stdout.flush();
         }
-        this.set_variable('$?', code);
+        this._tmp_env = Object.create(null);
+        this.set_variable('$?', code.toString());
         return code;
     }
 

@@ -96,7 +96,7 @@ export interface BashInterpreter {
     prompt(string: string): string;
     evaluate(code: string): TypeOrPromise<number>;
     command_exists(command: any): command is keyof Commands;
-    exec(command: string, ...args: string[]): ReturnType<BashCommand>;
+    exec(command: string, ...args: string[]): PromiseOrType<number>;
     get_variable(name: string): Variable | undefined | never;
     set_variable(name: string, value: Variable): void;
     completion(command: string, type: Completion): TypeOrPromise<string[]>;
