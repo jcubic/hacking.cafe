@@ -22,10 +22,17 @@
     <meta name="twitter:description" content="Hacking Cafe Terminal" />
     <meta name="twitter:image" content="https://hacking.cafe/social-card.jpg" />
     <style>
-:root {
-    --size: 1.2;
-    --background: #212529;
-}
+     :root {
+         --size: 1.2;
+         --background: #212529;
+     }
+     /* fix shifting of the cmd when using cmd > file */
+     .terminal-output {
+         margin-left: 1px;
+     }
+     .cmd:not(:has(span[style="width: 1px;"])) {
+         margin-left: 1px;
+     }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/js-polyfills/keyboard.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css" />
