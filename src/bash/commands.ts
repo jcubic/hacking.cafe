@@ -318,3 +318,75 @@ export async function read(this: BashContext, ...args: string[]) {
     }
     return 0;
 }
+
+// -----------------------------------------------------------------------------
+export async function test(this: BashContext, ...args: string[]) {
+    const options = parse_options(args);
+    const { bash, fs } = this;
+    async function is(filename: string, string: keyof Stats | null = null) {
+        try {
+            const fullpath = bash.resolve_path(filename);
+            const stat = await fs.stat(fullpath);
+            if (string) {
+                return stat[string]() ? 0 : 1;
+            }
+            return 0;
+        } catch(e) {
+            return 1;
+        }
+    }
+    if (typeof options.d === 'string') {
+        return is(options.d, 'isDirectory');
+    }
+    if (typeof options.e === 'string') {
+        return is(options.e);
+    }
+    if (typeof options.f === 'string') {
+        return is(options.f, 'isFile');
+    }
+    if (typeof options.L === 'string' || typeof options.h === 'string') {
+        return is((options.L ?? options.h) as string, 'isSymbolicLink');
+    }
+    if (options._.length === 3) {
+        const [left, op, right] = options._
+        switch (op) {
+            case '=':
+                return left === right ? 0 : 1;
+            case '!=':
+                return left !== right ? 0 : 1;
+            case '<':
+                return left.localeCompare(right) < 0 ? 0 : 1;
+            case '>':
+                return left.localeCompare(right) > 0 ? 0 : 1;
+        }
+        if (op[0] === '-') {
+            const a = parseInt(left, 10);
+            const b = parseInt(right, 10);
+            switch (op) {
+                case '-eq':
+                    return a === b ? 0 : 1;
+                case '-ge':
+                    return a >= b ? 0 : 1;
+                case '-gt':
+                    return a > b ? 0 : 1;
+                case '-le':
+                    return a <= b ? 0 : 1;
+                case '-lt':
+                    return a < b ? 0 : 1;
+                case '-ne':
+                    return a !== b ? 0 : 1;
+            }
+        }
+        throw new Error(`test: unsuported operator ${op}`);
+    }
+    if (options._.length === 2) {
+        const [op, string] = options._;
+        switch (op) {
+            case '-n':
+                return string.length > 0 ? 0 : 1;
+            case '-z':
+                return string.length === 0 ? 0 : 1;
+        }
+    }
+    throw new Error('Unkown operator');
+}

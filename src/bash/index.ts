@@ -939,12 +939,19 @@ export class Bash implements BashInterpreter {
         }
         let command = await this.resolve(ast.name);
         if (this.shortcut_exists(command)) {
-            command = this.__shorcuts[command];
+            command = this._shorcuts[command];
         }
         if (typeof command !== 'string') {
             throw new Error(`Invalid value '${ast.name}'`);
         }
         const args = (await this.words(ast.suffix)) as string[];
+        if (command === '[') {
+            if (args.at(-1) !== ']') {
+                throw new Error("bash: [: missing `]'");
+            }
+            args.pop();
+            command = 'test';
+        }
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
         if (input_redir.length) {
@@ -972,8 +979,8 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     protected async While(ast: While) {
         const cond = ast.kind === 'while' ?
-            (clause) => clause !== 0 :
-            (clause) => clause === 0;
+            (clause: number) => clause !== 0 :
+        (clause: number) => clause === 0;
         let result;
         while (true) {
             const clause = await this.dispatch(ast.clause);
