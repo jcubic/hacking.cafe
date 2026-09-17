@@ -73,75 +73,11 @@ export { Completion };
 export type { Stdout, Stdin, PromisifiedFS, Environment, Commands, BashContext, ListDir };
 
 import { complete_file, complete_directory } from './completion';
+import { BufferOutput, PipeOutput, PipeStdin, SilientOutput } from './io';
 
-/*
- * We need to use buffers in order to redirect them with pipes.
- * the command write to stdout when no pipes or last in pipe
- * the buffer are flushed.
- */
-export class BufferOutput implements Stdout {
-    protected _buffer: string[];
-    constructor(buffer = []) {
-        this._buffer = buffer;
-    }
-    output() {
-        return this._buffer.join('');
-    }
-    flush() {
-        if (this._buffer.length) {
-            this.clear();
-        }
-    }
-    clear() {
-        this._buffer = [];
-    }
-    write(str: string) {
-        this._buffer.push(str);
-    }
-    writeln(str: string) {
-        this.write(str + '\n');
-    }
-}
-
-class SilientOutput extends BufferOutput {
-    flush() { }
-    clear() { }
-}
-
-/*
- * PipeOutput exposes internal buffer so it can be passed
- * to PipeStdin
- */
-class PipeOutput extends BufferOutput {
-    get buffer() {
-        return this._buffer;
-    }
-}
-
-/*
- * PipeStdin accept buffer from stdout as constructor
- * and return the content of that buffer when command reads the data
- */
-class PipeStdin implements Stdin {
-    protected _lines: string[];
-    constructor(buff: string) {
-        this._lines = buff.match(/.*?\n|.+$/g) || [];
-    }
-    read() {
-        return this._lines.join('');
-    }
-    read_line() {
-        if (!this._lines.length) {
-            return null;
-        }
-        return this._lines.shift() as string;
-    }
-}
-
-type Module = BashInterpreter | PromisifiedFS | Stdin | Stdout;
+export { BufferOutput };
 
 type ReplaceCallback = (pattern: string) => RegExp;
-
 
 /*
  * Bash class is more like a Unix system
@@ -159,7 +95,7 @@ export class Bash implements BashInterpreter {
     // BroadcastChannel is used to access modules from inside web worker process
     private _channel: BroadcastChannel;
     // list of exposed modules for the webworker process
-    private _modules: Record<string, () => Module>;
+    private _modules: Record<string, () => unknown>;
     private _shorcuts = {
         '.': 'source'
     } as const;
@@ -181,8 +117,8 @@ export class Bash implements BashInterpreter {
             stdout: () => this._context.stdout,
             stderr: () => this._context.stderr,
             stdin: () => this._context.stdin,
-            path: () => path as unknown as Module,
-            '$.terminal': () => $.terminal as unknown as Module
+            path: () => path,
+            '$.terminal': () => $.terminal
         };
         this.init_ipc_channel();
     }
