@@ -57,7 +57,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `$@` / `$*` / `$#`
 - [x] `read -p "contunue? (y/n) "`
 - [ ] history
-- [ ] export / unset
+- [x] export
+- [ ] unset
 - [ ] completion
 
 ## Limitations

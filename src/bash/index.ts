@@ -88,8 +88,9 @@ type ReplaceCallback = (pattern: string) => RegExp;
 export class Bash implements BashInterpreter {
     // object containing builtin and user commands
     private _commands: Commands;
-    // env contain variables defined in bash
-    private _env: Environment;
+    // env contain variables defined in Bash
+    private _global: Environment;
+    private _local: Environment;
     // context is object that is passed to builtin commands as this
     private _context: BashContext;
     // BroadcastChannel is used to access modules from inside web worker process
@@ -101,14 +102,16 @@ export class Bash implements BashInterpreter {
     } as const;
     // indicator to not flush the output in Command
     private _pipe: boolean;
+    private _export: boolean;
     private _args: string[];
     private _name: string;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
-        this._context = { cwd: context.home, bash: this, ...context };
-        this._env = Object.create(null);
+        this._context = { ...context, cwd: context.home, bash: this };
+        this._global = Object.create(null);
+        this._local = Object.create(null);
         this._channel = new BroadcastChannel('__ipc__');
-        this._pipe = false;
+        this._pipe = this._export = false;
         this._args = [];
         this._name = 'bash';
         this._modules = {
@@ -157,7 +160,7 @@ export class Bash implements BashInterpreter {
     // read only copy of internal env
     // -------------------------------------------------------------------------
     get env() {
-        return Object.assign(Object.create(null), this._env);
+        return Object.assign(Object.create(null), this._global);
     }
 
     // -------------------------------------------------------------------------
@@ -180,27 +183,10 @@ export class Bash implements BashInterpreter {
     // like variables are not modified by the script
     // -------------------------------------------------------------------------
     public fork() {
-        const {
-            stdout,
-            stderr,
-            stdin,
-            fs,
-            home,
-            user,
-            host
-        } = this._context;
-        const bash = new Bash(this._commands, {
-            stdout,
-            stderr,
-            stdin,
-            fs,
-            user,
-            host,
-            home
-        });
+        const bash = new Bash(this._commands, this._context);
         // we need to inherit the state of parent bash
         // we set interal env using public read only getter
-        bash._env = this.env;
+        bash._global = this.env;
         bash.cwd = this.cwd;
         return bash;
     }
@@ -490,8 +476,11 @@ export class Bash implements BashInterpreter {
 
     // -------------------------------------------------------------------------
     public get_variable(name: string) {
-        if (Object.hasOwn(this._env, name)) {
-            return this._env[name];
+        if (Object.hasOwn(this._local, name)) {
+            return this._local[name];
+        }
+        if (Object.hasOwn(this._global, name)) {
+            return this._global[name];
         }
         if (name === '$0') {
             return this._name;
@@ -511,7 +500,11 @@ export class Bash implements BashInterpreter {
 
     // -------------------------------------------------------------------------
     public set_variable(name: string, value: Variable) {
-        this._env[name] = value;
+        if (this._export) {
+            this._global[name] = value;
+        } else {
+            this._local[name] = value;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -945,6 +938,16 @@ export class Bash implements BashInterpreter {
             }
             args.pop();
             command = 'test';
+        }
+        if (command === 'export') {
+            // we need to parse arguments becasue unbash doesn't parse
+            // export properly see: webpro-nl/unbash#12
+            this._export = true;
+            for (const variable of args) {
+                await this.evaluate(variable);
+            }
+            this._export = false;
+            return 0;
         }
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
