@@ -78,12 +78,66 @@ class BufferTerminalOutput extends BufferOutput {
 
 class Input implements Stdin {
     protected _term: JQueryTerminal;
+    protected _lines: string[] | null;
     constructor(term: JQueryTerminal) {
         this._term = term;
+        this._lines = null;
     }
     read() {
-        const ret = this._term.read('');
+        const ret: Promise<string> = new Promise((resolve, reject) => {
+            const lines: string[] = [];
+            this._term.push($.noop, {
+                prompt: '',
+                onBeforeCommand() {
+                    const command = this.get_command();
+                    this.echo(command);
+                    lines.push(this.get_command());
+                    return false;
+                },
+                keymap: {
+                    'ENTER': function() {
+                        const command = this.get_command();
+                        lines.push(command);
+                        this.echo(command);
+                        this.set_command('');
+                        return false;
+                    },
+                    'CTRL+C': function() {
+                        this.echo('^C');
+                        this.pop();
+                        reject(new Error('ABORT'));
+                    },
+                    'CTRL+D': function() {
+                        this.pop();
+                        console.log({lines});
+                        resolve(lines.join('\n') + '\n');
+                        return false;
+                    }
+                }
+            });
+        });
         // scripts are pausing the terminal when run
+        if (this._term.paused()) {
+            this._term.resume();
+        }
+        return ret;
+    }
+    async read_line() {
+        const ret: Promise<string> = new Promise((resolve, reject) => {
+            this._term.push(function(command) {
+                this.pop();
+                resolve(command);
+            }, {
+                prompt: '',
+                keymap: {
+                    'CTRL+C': function() {
+                        this.echo('^C');
+                        this.pop();
+                        reject(new Error('ABORT'));
+                    }
+                }
+            });
+        });
         if (this._term.paused()) {
             this._term.resume();
         }

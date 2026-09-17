@@ -35,6 +35,7 @@ export interface Stdout {
 
 export interface Stdin {
     read(): TypeOrPromise<string>;
+    read_line(): TypeOrPromise<string | null>;
 }
 
 export type BashCommand = (this: BashContext, ...args: string[]) =>
@@ -95,7 +96,8 @@ export interface BashInterpreter {
     evaluate(code: string): TypeOrPromise<number>;
     command_exists(command: any): command is keyof Commands;
     exec(command: string, ...args: string[]): ReturnType<BashCommand>;
-    variable(name: string): Variable | undefined | never;
+    get_variable(name: string): Variable | undefined | never;
+    set_variable(name: string, value: Variable): void;
     completion(command: string, type: Completion): TypeOrPromise<string[]>;
 }
 

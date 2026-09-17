@@ -51,7 +51,8 @@ import type {
     BashContext,
     BashInterpreter,
     ListDir,
-    UserData
+    UserData,
+    Variable
 } from './types';
 
 import { fs_constants } from './constants';
@@ -119,16 +120,22 @@ class PipeOutput extends BufferOutput {
  * and return the content of that buffer when command reads the data
  */
 class PipeStdin implements Stdin {
-    protected _content: string;
+    protected _lines: string[];
     constructor(arg: string[] | string) {
         if (Array.isArray(arg)) {
-            this._content = arg.join('');
+            this._lines = arg;
         } else {
-            this._content = arg;
+            this._lines = arg.split('\n');
         }
     }
     read() {
-        return this._content;
+        return this._lines.join('\n');
+    }
+    read_line() {
+        if (!this._lines.length) {
+            return null;
+        }
+        return this._lines.shift() as string;
     }
 }
 
@@ -403,7 +410,7 @@ export class Bash implements BashInterpreter {
     prompt() {
         let prompt;
         try {
-            prompt = this.variable('$PS1');
+            prompt = this.get_variable('$PS1');
         } catch (e) {
             // ignore
         } finally {
@@ -475,7 +482,7 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     private async find_name(command: string): Promise<string | null> {
         try {
-            const PATH = this.variable('$PATH') as string;
+            const PATH = this.get_variable('$PATH') as string;
             const paths = PATH.split(':')
             try {
                 const pathname = this.resolve_path(command);
@@ -533,11 +540,16 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    public variable(name: string) {
+    public get_variable(name: string) {
         if (Object.hasOwn(this._env, name)) {
             return this._env[name];
         }
         throw new Error(`Undefined variable ${name}`);
+    }
+
+    // -------------------------------------------------------------------------
+    public set_variable(name: string, value: Variable) {
+        this._env[name] = value;
     }
 
     // -------------------------------------------------------------------------
@@ -666,7 +678,7 @@ export class Bash implements BashInterpreter {
             case 'SimpleExpansion': {
                 const value = ast.text;
                 if (value.startsWith('$')) {
-                    return this.variable(value);
+                    return this.get_variable(value);
                 }
                 break;
             }
@@ -689,7 +701,7 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     protected async replace(ast: ParameterExpansionPart, callback: ReplaceCallback) {
         if (ast.replace) {
-            const variable = this.variable('$' + ast.parameter);
+            const variable = this.get_variable('$' + ast.parameter);
             const repl = ast.replace;
             let pattern;
             if (!repl.pattern.parts) {
@@ -721,7 +733,7 @@ export class Bash implements BashInterpreter {
     // -------------------------------------------------------------------------
     protected async trim(ast: ParameterExpansionPart, front: boolean, greedy: boolean) {
         if (ast.operand) {
-            const variable = this.variable('$' + ast.parameter);
+            const variable = this.get_variable('$' + ast.parameter);
             const string = variable.toString();
             let pattern;
             if (!ast.operand.parts) {
@@ -750,7 +762,7 @@ export class Bash implements BashInterpreter {
         if (ast.operand) {
             let variable;
             try {
-                variable = this.variable('$' + ast.parameter);
+                variable = this.get_variable('$' + ast.parameter);
                 if (strict && !variable) {
                     return '';
                 }
@@ -760,7 +772,7 @@ export class Bash implements BashInterpreter {
             if (ast.operand && !variable) {
                 const value = await this.resolve(ast.operand);
                 if (set) {
-                    this._env['$' + ast.parameter] = value;
+                    this.set_variable('$' + ast.parameter, value);
                 }
                 return value;
             }
@@ -772,7 +784,7 @@ export class Bash implements BashInterpreter {
     protected async use_alternative(ast: ParameterExpansionPart, strict: boolean) {
         if (ast.operand) {
             try {
-                const variable = this.variable('$' + ast.parameter);
+                const variable = this.get_variable('$' + ast.parameter);
                 if (!variable && !strict) {
                     return '';
                 }
@@ -790,7 +802,7 @@ export class Bash implements BashInterpreter {
     protected async show_error(ast: ParameterExpansionPart, strict: boolean) {
         if (ast.operator) {
             try {
-                const variable = this.variable('$' + ast.parameter);
+                const variable = this.get_variable('$' + ast.parameter);
                 if (!variable && !strict) {
                     throw new Error();
                 }
@@ -842,22 +854,22 @@ export class Bash implements BashInterpreter {
                 case ':?':
                     return this.show_error(ast, false);
                 case '^': {
-                    const variable = this.variable('$' + ast.parameter).toString();
+                    const variable = this.get_variable('$' + ast.parameter).toString();
                     return variable[0].toUpperCase() + variable.substring(1);
                 }
                 case '^^': {
-                    const variable = this.variable('$' + ast.parameter).toString();
+                    const variable = this.get_variable('$' + ast.parameter).toString();
                     return variable.toUpperCase();
                 }
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }
-        const variable = this.variable('$' + ast.parameter);
+        const variable = this.get_variable('$' + ast.parameter);
         if (ast.length) {
             return variable.length;
         }
         if (ast.indirect) {
-            return this.variable('$' + variable);
+            return this.get_variable('$' + variable);
         }
         if (ast.slice) {
             const offset = parseInt(await this.resolve(ast.slice.offset), 10);
@@ -916,7 +928,8 @@ export class Bash implements BashInterpreter {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
                 if (prefix.type === 'Assignment' && prefix.value) {
-                    this._env['$' + prefix.name] = await this.resolve(prefix.value);
+                    const value = await this.resolve(prefix.value);
+                    this.set_variable('$' + prefix.name, value);
                 }
             }
             return;

@@ -286,3 +286,32 @@ export async function chmod(this: BashContext, ...args: string[]) {
         this.stdout.writeln('Usage: chmod mode files');
     }
 }
+
+// -----------------------------------------------------------------------------
+export async function read(this: BashContext, ...args: string[]) {
+    const options = parse_options(args);
+    if (typeof options.p === 'string') {
+        this.stdout.write(options.p);
+    }
+    const input = await this.stdin.read_line();
+    if (input !== null) {
+        if (options._.length === 1) {
+            const [ variable ] = options._;
+            this.bash.set_variable('$' + variable, input);
+        } else if (options._.length > 1) {
+            let ifs;
+            try {
+                ifs = this.bash.get_variable('$IFS');
+            } catch(e) {
+            }
+            ifs ??= ' \\t\\n';
+            const re = new RegExp('[' + ifs + ']');
+            const parts = input.split(re);
+            for (let i = 0; i < options._.length; ++i) {
+                const variable = options._[i] as string;
+                const value = parts[i] ?? '';
+                this.bash.set_variable('$' + variable, value);
+            }
+        }
+    }
+}
