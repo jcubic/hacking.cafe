@@ -902,22 +902,23 @@ export class Bash implements BashInterpreter {
     // swap stdin and stdout for the pipeline. Pipes are not line oriented
     // like in Unix, they process whole input and then call next command
     // in the pipe. This is handled by the Buffered Output and buffer swaping
-    // by PipeInput/Output class.
+    // by PipeInput/Output class. Pipeline run in the subshell.
     // -------------------------------------------------------------------------
     protected async Pipeline(ast: Pipeline) {
-        const { stdin, stdout, stderr } = this._context;
-        const commands = [...ast.commands];
+        const bash = this.fork();
+        const { stdin, stdout, stderr } = bash._context;
         const output = new PipeOutput();
-        this._context.stdout = output;
+        const commands = [...ast.commands];
+        bash._context.stdout = output;
         while (commands.length > 1) {
             const command = commands.shift();
-            await this.Command(command as Command, true);
-            this._context.stdin = new PipeStdin(output.buffer);
+            await bash.Command(command as Command, true);
+            bash._context.stdin = new PipeStdin(output.buffer);
             output.flush();
         }
-        Object.assign(this._context, { stdout, stderr });
-        await this.Command(commands.pop() as Command);
-        this._context.stdin = stdin;
+        Object.assign(bash._context, { stdout, stderr });
+        await bash.Command(commands.pop() as Command);
+        bash._context.stdin = stdin;
     }
 
     // -------------------------------------------------------------------------
