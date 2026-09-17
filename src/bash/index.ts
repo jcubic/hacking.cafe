@@ -843,6 +843,9 @@ export class Bash implements BashInterpreter {
         if (ast.length) {
             return variable.length;
         }
+        if (ast.indirect) {
+            return this.variable('$' + variable);
+        }
         return variable;
     }
 

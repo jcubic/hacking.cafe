@@ -38,7 +38,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x]: `${NAME^}` - camel case
   - [x]: `${NAME^^}` - upper case
   - [x]: `LEN=${#NAME}` - string length
-  - [ ]: `${!POINTER}` - indirect variable
+  - [x]: `${!POINTER}` - indirect variable
 - [ ]: run in background `&` (bash in worker?)
 - [ ]: process substitution `<(command)` and `>(command)`
 - [ ]: extract commands like `cat` or `grep` into scripts in `/bin`
