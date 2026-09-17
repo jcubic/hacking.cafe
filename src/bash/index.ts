@@ -468,6 +468,9 @@ export class Bash implements BashInterpreter {
         if (Object.hasOwn(this._globals, name)) {
             return this._globals[name];
         }
+        if (name === '$PWD') {
+            return this.cwd;
+        }
         if (name === '$0') {
             return this._name;
         }
@@ -954,37 +957,43 @@ export class Bash implements BashInterpreter {
             command = 'test';
         }
         const builtin = ('builtin_' + command) as keyof BashInterpreter;
-        if (typeof this[builtin] === 'function') {
-            return this[builtin](args);
-        }
-        const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
-        const { stdout, stderr } = this._context;
-        if (input_redir.length) {
-            for (const redirect of input_redir) {
-                await this.redirect(redirect, async () => {
-                    code = await this.exec(command, ...args);
-                });
+        try {
+            if (typeof this[builtin] === 'function') {
+                return this[builtin](args);
             }
-        } else {
+            const [input_redir, output_redir] = this.split_redirects(ast);
+            const { stdout, stderr } = this._context;
+            if (input_redir.length) {
+                for (const redirect of input_redir) {
+                    await this.redirect(redirect, async () => {
+                        code = await this.exec(command, ...args);
+                    });
+                }
+            } else {
+                if (output_redir.length) {
+                    this._context.stdout = new SilientOutput();
+                    this._context.stderr = new SilientOutput();
+                }
+                code = await this.exec(command, ...args);
+            }
             if (output_redir.length) {
-                this._context.stdout = new SilientOutput();
-                this._context.stderr = new SilientOutput();
+                for (const redirect of output_redir) {
+                    await this.redirect(redirect);
+                }
+                this._context.stderr = stderr;
+                this._context.stdout = stdout;
             }
-            code = await this.exec(command, ...args);
-        }
-        if (output_redir.length) {
-            for (const redirect of output_redir) {
-                await this.redirect(redirect);
-            }
-            this._context.stderr = stderr;
-            this._context.stdout = stdout;
+        } catch(e) {
+            code = 1;
+            this._context.stderr.writeln((e as Error).message);
         }
         if (!this._pipe) {
             const { stdout, stderr } = this._context;
             stderr.flush();
             stdout.flush();
         }
+        this.set_variable('$?', code);
         return code;
     }
 

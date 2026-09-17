@@ -13,6 +13,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `$PS1` variable
 - [x] `$PATH` variable
 - [x] `$IFS` variable
+- [x] `$?` variable
+- [x] `$PWD` variable
 - [x] subshells
 - [x] If statements
 - [x] and/or expressions
@@ -48,7 +50,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] aliases and functions
 - [ ] order: keywords => aliases => function => builtins => executables
 - [x] `printf`
-- [ ] `pushd`/`popd`
+- [x] `pushd`/`popd`
 - [x] `while`, `until`
 - [ ] `for`
 - [x] `while read line`
