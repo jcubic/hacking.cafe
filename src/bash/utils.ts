@@ -104,7 +104,17 @@ export async function list_dir(fs: PromisifiedFS, dir: string): Promise<ListDir>
     for (const name of dir_list) {
         const file = path.join(dir, name);
         try {
-            const stat = await fs.stat(file);
+            let stat;
+            try {
+                stat = await fs.stat(file);
+            } catch(e) {
+                const lstat = await fs.lstat(file);
+                if (!lstat.isSymbolicLink()) {
+                    throw new Error('Internal error');
+                }
+                files.push(name);
+                continue;
+            }
             if (stat.isFile()) {
                 files.push(name);
             } else {

@@ -201,8 +201,19 @@ export async function ls(this: BashContext, ...args: string[]) {
     let result = dirs.concat(filter(content.files));
     result = await Promise.all(result.map(async (name: string) => {
         const fullname = path.join(dir_path, name);
-        const stat = await this.fs.stat(fullname);
+        const lstat = await this.fs.lstat(fullname);
+        let stat;
+        try {
+            stat = await this.fs.stat(fullname);
+        } catch(e) {
+            // broken symlink
+            stat = lstat;
+        }
         const prefix = options.l ? long_ls(this, stat) : '';
+        if (lstat.isSymbolicLink()) {
+            const color = stat === lstat ? '\x1b[40;31;01m' : '\x1b[01;36m';
+            return [prefix, color, name].join('') + '\x1b[m';
+        }
         if (stat.isDirectory()) {
             return `${prefix}\x1b[01;34m${name}\x1b[m`;
         }
@@ -220,6 +231,7 @@ export async function ls(this: BashContext, ...args: string[]) {
     }
 }
 
+// -----------------------------------------------------------------------------
 export async function adduser(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     if (options._.length === 1) {
