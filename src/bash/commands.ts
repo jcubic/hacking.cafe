@@ -323,10 +323,10 @@ export async function read(this: BashContext, ...args: string[]) {
 export async function test(this: BashContext, ...args: string[]) {
     const options = parse_options(args);
     const { bash, fs } = this;
-    async function is(filename: string, string: keyof Stats | null = null) {
+    async function is(filename: string, string: keyof Stats | null = null, follow = true) {
         try {
             const fullpath = bash.resolve_path(filename);
-            const stat = await fs.stat(fullpath);
+            const stat = follow ? await fs.stat(fullpath) : await fs.lstat(fullpath);
             if (string) {
                 return stat[string]() ? 0 : 1;
             }
@@ -345,7 +345,7 @@ export async function test(this: BashContext, ...args: string[]) {
         return is(options.f, 'isFile');
     }
     if (typeof options.L === 'string' || typeof options.h === 'string') {
-        return is((options.L ?? options.h) as string, 'isSymbolicLink');
+        return is((options.L ?? options.h) as string, 'isSymbolicLink', false);
     }
     if (options._.length === 3) {
         const [left, op, right] = options._
