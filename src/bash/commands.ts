@@ -384,8 +384,8 @@ export async function test(this: BashContext, ...args: string[]) {
     if (typeof options.L === 'string' || typeof options.h === 'string') {
         return is((options.L ?? options.h) as string, 'isSymbolicLink', false);
     }
-    if (options._.length === 3) {
-        const [left, op, right] = options._
+    if (args.length === 3) {
+        const [left, op, right] = args;
         switch (op) {
             case '=':
                 return left === right ? 0 : 1;
@@ -416,8 +416,8 @@ export async function test(this: BashContext, ...args: string[]) {
         }
         throw new Error(`test: unsuported operator ${op}`);
     }
-    if (options._.length === 2) {
-        const [op, string] = options._;
+    if (args.length === 2) {
+        const [op, string] = args;
         switch (op) {
             case '-n':
                 return string.length > 0 ? 0 : 1;
