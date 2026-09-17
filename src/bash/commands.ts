@@ -338,10 +338,7 @@ export async function read(this: BashContext, ...args: string[]) {
         return 1;
     }
     input = input.replace(/\n+$/, '');
-    if (options._.length === 1) {
-        const [ variable ] = options._;
-        this.bash.set_variable('$' + variable, input);
-    } else if (options._.length > 1) {
+    if (options._.length > 1) {
         let ifs;
         try {
             ifs = this.bash.get_variable('$IFS');
@@ -355,6 +352,9 @@ export async function read(this: BashContext, ...args: string[]) {
             const value = parts[i] ?? '';
             this.bash.set_variable('$' + variable, value);
         }
+    } else {
+        const variable = options._.length === 0 ? 'REPLY' : options._[0];
+        this.bash.set_variable('$' + variable, input);
     }
     return 0;
 }
