@@ -911,6 +911,19 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    // we need to parse arguments becasue unbash doesn't parse
+    // export properly see: webpro-nl/unbash#12
+    // -------------------------------------------------------------------------
+    private async export(args: string[]) {
+        this._export = true;
+        for (const variable of args) {
+            await this.evaluate(variable);
+        }
+        this._export = false;
+        return 0;
+    }
+
+    // -------------------------------------------------------------------------
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
     protected async Command(ast: Command) {
@@ -922,7 +935,7 @@ export class Bash implements BashInterpreter {
                     this.set_variable('$' + prefix.name, value);
                 }
             }
-            return;
+            return 0;
         }
         let command = await this.resolve(ast.name);
         if (this.shortcut_exists(command)) {
@@ -940,14 +953,7 @@ export class Bash implements BashInterpreter {
             command = 'test';
         }
         if (command === 'export') {
-            // we need to parse arguments becasue unbash doesn't parse
-            // export properly see: webpro-nl/unbash#12
-            this._export = true;
-            for (const variable of args) {
-                await this.evaluate(variable);
-            }
-            this._export = false;
-            return 0;
+            return this.export(args);
         }
         const [input_redir, output_redir] = this.split_redirects(ast);
         let code;
