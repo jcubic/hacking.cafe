@@ -37,6 +37,7 @@ import {
     is_permission,
     parse_mode
 } from './utils';
+import { Stdout } from '../bash';
 
 // -----------------------------------------------------------------------------
 export function echo(this: BashContext, ...args: string[]) {
@@ -499,5 +500,37 @@ export async function printf(this: BashContext, ...args: string[]) {
             break;
         }
     }
+    return 0;
+}
+
+const stack = [];
+
+// -----------------------------------------------------------------------------
+export async function pushd(this: BashContext, directory: string) {
+    stack.push(this.cwd);
+    await this.bash.exec('cd', directory);
+    await this.bash.exec('dirs');
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
+export function dirs(this: BashContext) {
+    const list = [...stack];
+    list.push(this.cwd);
+    list.reverse();
+    this.stdout.writeln(list.map(dir => {
+        return dir.replace(this.home, '~');
+    }).join(' '));
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
+export async function popd(this: BashContext) {
+    if (!stack.length) {
+        throw new Error('bash: popd: directory stack empty');
+    }
+    const direcotry = stack.pop();
+    await this.bash.exec('cd', directory);
+    await this.bash.exec('dirs');
     return 0;
 }
