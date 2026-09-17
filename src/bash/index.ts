@@ -831,7 +831,11 @@ export class Bash implements BashInterpreter {
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }
-        return this.variable('$' + ast.parameter);
+        const variable = this.variable('$' + ast.parameter);
+        if (ast.length) {
+            return variable.length;
+        }
+        return variable;
     }
 
     // -------------------------------------------------------------------------

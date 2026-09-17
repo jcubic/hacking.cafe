@@ -23,7 +23,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x]: Bash scripts and shebang
 - [ ]: variable expansions:
   - [ ]: `${DATABASE_URL:="localhost"}`
-  - [ ]: `USER_ID=${1:?"Error, arg missing!"}`
+  - [x]: `USER_ID=${1:?"Error, arg missing!"}`
   - [x]: `${VAR:-default}`
   - [x]: `${VAR-default}`
   - [x]: `${var+alternative}`
@@ -37,7 +37,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x]: `EXTENSION=${FILE#*.}` remove before
   - [ ]: `${NAME^}` camel case
   - [ ]: `${NAME^^}` upper case
-  - [ ]: `LEN=${#NAME}` - string length
+  - [x]: `LEN=${#NAME}` - string length
   - [ ]: `${!POINTER}` - indirect variable
 - [ ]: run in background `&` (bash in worker?)
 - [ ]: process substitution `<(command)` and `>(command)`
