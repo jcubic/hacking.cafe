@@ -27,6 +27,7 @@ import type {
     Node,
     Word,
     AndOr,
+    While,
     Script,
     Command,
     Redirect,
@@ -121,15 +122,11 @@ class PipeOutput extends BufferOutput {
  */
 class PipeStdin implements Stdin {
     protected _lines: string[];
-    constructor(arg: string[] | string) {
-        if (Array.isArray(arg)) {
-            this._lines = arg;
-        } else {
-            this._lines = arg.split('\n');
-        }
+    constructor(buff: string) {
+        this._lines = buff.match(/.*?\n|.+$/g) || [];
     }
     read() {
-        return this._lines.join('\n');
+        return this._lines.join('');
     }
     read_line() {
         if (!this._lines.length) {
@@ -164,14 +161,17 @@ export class Bash implements BashInterpreter {
     // function that wraps user script with exact code that invoke the main
     // function and expose modules into via _channel RPC like mechanism
     private _process: (code: string, args: string[]) => Promise<string>;
-    private _aliases = {
+    private _shorcuts = {
         '.': 'source'
     } as const;
+    // indicator to not flush the output in Command
+    private _pipe: boolean;
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { cwd: context.home, bash: this, ...context };
         this._env = Object.create(null);
         this._channel = new BroadcastChannel('__ipc__');
+        this._pipe = false;
         this._modules = {
             fs: () => this.fs,
             bash: () => this,
@@ -475,8 +475,8 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    public alias_exists(command: any): command is keyof typeof this._aliases {
-        return Object.hasOwn(this._aliases, command);
+    public shortcut_exists(command: any): command is keyof typeof this._shorcuts {
+        return Object.hasOwn(this._shorcuts, command);
     }
 
     // -------------------------------------------------------------------------
@@ -910,21 +910,23 @@ export class Bash implements BashInterpreter {
         const output = new PipeOutput();
         const commands = [...ast.commands];
         bash._context.stdout = output;
+        bash._pipe = true;
         while (commands.length > 1) {
-            const command = commands.shift();
-            await bash.Command(command as Command, true);
-            bash._context.stdin = new PipeStdin(output.buffer);
+            const command = commands.shift() as Node;
+            await bash.dispatch(command);
+            bash._context.stdin = new PipeStdin(output.output());
             output.flush();
         }
         Object.assign(bash._context, { stdout, stderr });
-        await bash.Command(commands.pop() as Command);
+        bash._pipe = false;
+        await bash.dispatch(commands.pop() as Node);
         bash._context.stdin = stdin;
     }
 
     // -------------------------------------------------------------------------
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
-    protected async Command(ast: Command, pipe = false) {
+    protected async Command(ast: Command) {
         if (!ast.name) {
             if (ast.prefix.length) {
                 const [ prefix ] = ast.prefix;
@@ -936,8 +938,8 @@ export class Bash implements BashInterpreter {
             return;
         }
         let command = await this.resolve(ast.name);
-        if (this.alias_exists(command)) {
-            command = this._aliases[command];
+        if (this.shortcut_exists(command)) {
+            command = this.__shorcuts[command];
         }
         if (typeof command !== 'string') {
             throw new Error(`Invalid value '${ast.name}'`);
@@ -959,12 +961,28 @@ export class Bash implements BashInterpreter {
                 await this.redirect(redirect);
             }
         }
-        if (!pipe) {
+        if (!this._pipe) {
             const { stdout, stderr } = this._context;
             stderr.flush();
             stdout.flush();
         }
         return code;
+    }
+
+    // -------------------------------------------------------------------------
+    protected async While(ast: While) {
+        const cond = ast.kind === 'while' ?
+            (clause) => clause !== 0 :
+            (clause) => clause === 0;
+        let result;
+        while (true) {
+            const clause = await this.dispatch(ast.clause);
+            if (cond(clause)) {
+                break;
+            }
+            result = await this.dispatch(ast.body);
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------
