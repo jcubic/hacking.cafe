@@ -316,7 +316,7 @@ export class Bash implements BashInterpreter {
     // run user defined script (a JavaScript code) from FS
     // the file always exist and is executable when this function is called
     // -------------------------------------------------------------------------
-    private async script(filename: string, ...args: string[]): Promise<number> {
+    private async exec_script(filename: string, ...args: string[]): Promise<number> {
         let file = await this.fs.readFile(filename, 'utf8');
         const re = /^#!(.+)\n/;
         const shebang = file.match(re);
@@ -516,7 +516,14 @@ export class Bash implements BashInterpreter {
             if ((stat.mode & executable) === 0) {
                 throw new Error(`bash: ${command}: Permission denied`);
             }
-            return this.script(filename, ...args);
+            let code;
+            try {
+                code = await this.exec_script(filename, ...args);
+            } catch(e) {
+                this._context.stderr.writeln((e as Error).message);
+                return 1;
+            }
+            return code;
         }
     }
 
@@ -771,6 +778,25 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    protected async show_error(ast: ParameterExpansionPart, strict: boolean) {
+        if (ast.operator) {
+            try {
+                const variable = this.variable('$' + ast.parameter);
+                if (!variable && !strict) {
+                    throw new Error();
+                }
+                return variable;
+            } catch(e) {
+                if (ast.operand) {
+                    const err = await this.resolve(ast.operand);
+                    throw new Error(err || 'bash: var: parameter null or not set');
+                }
+            }
+        }
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
     protected async expansion(ast: ParameterExpansionPart) {
         if (ast.operator) {
             switch (ast.operator) {
@@ -798,6 +824,10 @@ export class Bash implements BashInterpreter {
                     return this.use_alternative(ast, true);
                 case ':+':
                     return this.use_alternative(ast, false);
+                case '?':
+                    return this.show_error(ast, true);
+                case ':?':
+                    return this.show_error(ast, false);
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }

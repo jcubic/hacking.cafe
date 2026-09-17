@@ -367,7 +367,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             try {
                 await bash.evaluate(command);
             } catch(e) {
-                this.error((e as Error).message);
+                this.echo((e as Error).message);
                 if (DEBUG) {
                     setTimeout(() => { throw e }, 0);
                 }
