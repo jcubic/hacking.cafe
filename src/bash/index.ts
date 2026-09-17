@@ -135,7 +135,6 @@ class PipeStdin implements Stdin {
 type Module = BashInterpreter | PromisifiedFS | Stdin | Stdout;
 
 type ReplaceCallback = (pattern: string) => RegExp;
-type GlobCallback = (pattern: string) => string;
 
 
 /*
@@ -693,18 +692,43 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected async trim(ast: ParameterExpansionPart, front: boolean, callback: GlobCallback) {
+    // # / ## trim the shortest/longest matching PREFIX. Since the match is
+    // anchored at position 0, the only thing that varies is how much the
+    // pattern consumes, so a plain ^-anchored regex with a greedy/lazy
+    // quantifier (from glob_to_regex) is enough.
+    //
+    // % / %% trim the shortest/longest matching SUFFIX. Here the match can
+    // start anywhere, and a $-anchored regex with no ^ always finds the
+    // *leftmost* start position that reaches the end - regardless of the
+    // quantifier's greediness, since every starting '.' can be stretched to
+    // the end anyway. That makes % (shortest suffix) behave like %% (longest
+    // suffix) if we just flip the quantifier. Instead we test candidate
+    // suffix lengths directly - shortest-first for %, longest-first for %% -
+    // against a fully ^...$ anchored pattern, where greedy vs lazy no longer
+    // matters because the whole candidate has to match either way.
+    // -------------------------------------------------------------------------
+    protected async trim(ast: ParameterExpansionPart, front: boolean, greedy: boolean) {
         if (ast.operand) {
             const variable = this.variable('$' + ast.parameter);
-            let operand;
+            const string = variable.toString();
+            let pattern;
             if (!ast.operand.parts) {
-                operand = callback(ast.operand.value);
+                pattern = glob_to_regex(ast.operand.value, greedy);
             } else {
-                operand = await this.resolve(ast.operand);
+                pattern = await this.resolve(ast.operand);
             }
-            const re = new RegExp(front ? '^' + operand : operand + '$');
-            console.log({ front, re });
-            return variable.toString().replace(re, '');
+            if (front) {
+                return string.replace(new RegExp('^' + pattern), '');
+            }
+            const re = new RegExp('^' + pattern + '$');
+            for (let i = 0; i <= string.length; i++) {
+                const len = greedy ? string.length - i : i;
+                const suffix = string.slice(string.length - len);
+                if (re.test(suffix)) {
+                    return string.slice(0, string.length - len);
+                }
+            }
+            return string;
         }
         return '';
     }
@@ -722,21 +746,13 @@ export class Bash implements BashInterpreter {
                         return new RegExp(pattern, 'g');
                     });
                 case '#':
-                    return this.trim(ast, true, (pattern) => {
-                        return glob_to_regex(pattern, false);
-                    });
+                    return this.trim(ast, true, false);
                 case '##':
-                    return this.trim(ast, true, (pattern) => {
-                        return glob_to_regex(pattern, true);
-                    });
+                    return this.trim(ast, true, true);
                 case '%':
-                    return this.trim(ast, false, (pattern) => {
-                        return glob_to_regex(pattern, false);
-                    });
+                    return this.trim(ast, false, false);
                 case '%%':
-                    return this.trim(ast, false, (pattern) => {
-                        return glob_to_regex(pattern, true);
-                    });
+                    return this.trim(ast, false, true);
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }
