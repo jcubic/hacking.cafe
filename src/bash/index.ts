@@ -746,7 +746,7 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
-    protected async use_default(ast: ParameterExpansionPart, strict: boolean) {
+    protected async use_default(ast: ParameterExpansionPart, strict: boolean, set = false) {
         if (ast.operand) {
             let variable;
             try {
@@ -758,7 +758,11 @@ export class Bash implements BashInterpreter {
                 // ignore
             }
             if (ast.operand && !variable) {
-                return await this.resolve(ast.operand);
+                const value = await this.resolve(ast.operand);
+                if (set) {
+                    this._env['$' + ast.parameter] = value;
+                }
+                return value;
             }
         }
         return '';
@@ -825,6 +829,10 @@ export class Bash implements BashInterpreter {
                     return this.use_default(ast, true);
                 case ':-':
                     return this.use_default(ast, false);
+                case '=':
+                    return this.use_default(ast, true, true);
+                case ':=':
+                    return this.use_default(ast, false, true);
                 case '+':
                     return this.use_alternative(ast, true);
                 case ':+':

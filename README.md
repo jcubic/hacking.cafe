@@ -21,8 +21,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x]: redirects (`>` and `<`)
 - [x]: JavaScript programs using web workers
 - [x]: Bash scripts and shebang
-- [ ]: variable expansions:
-  - [ ]: `${DATABASE_URL:="localhost"}`
+- [x]: variable expansions:
+  - [x]: `${DATABASE_URL:="localhost"}`
   - [x]: `USER_ID=${1:?"Error, arg missing!"}`
   - [x]: `${VAR:-default}`
   - [x]: `${VAR-default}`
