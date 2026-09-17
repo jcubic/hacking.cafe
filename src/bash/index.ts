@@ -828,6 +828,14 @@ export class Bash implements BashInterpreter {
                     return this.show_error(ast, true);
                 case ':?':
                     return this.show_error(ast, false);
+                case '^': {
+                    const variable = this.variable('$' + ast.parameter).toString();
+                    return variable[0].toUpperCase() + variable.substring(1);
+                }
+                case '^^': {
+                    const variable = this.variable('$' + ast.parameter).toString();
+                    return variable.toUpperCase();
+                }
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }

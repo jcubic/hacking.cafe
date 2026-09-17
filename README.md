@@ -34,9 +34,9 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x]: `${FILE%.*}` - remove traling non-greedy
   - [x]: `${PATH%%:*}` remove traling greedy
   - [x]: `${PATH##*/}` - remove greedy before
-  - [x]: `EXTENSION=${FILE#*.}` remove before
-  - [ ]: `${NAME^}` camel case
-  - [ ]: `${NAME^^}` upper case
+  - [x]: `EXTENSION=${FILE#*.}` - remove before
+  - [x]: `${NAME^}` - camel case
+  - [x]: `${NAME^^}` - upper case
   - [x]: `LEN=${#NAME}` - string length
   - [ ]: `${!POINTER}` - indirect variable
 - [ ]: run in background `&` (bash in worker?)
