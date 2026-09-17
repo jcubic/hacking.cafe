@@ -81,6 +81,7 @@ export type UserData = {
 
 export interface BashInterpreter {
     get commands(): string[];
+    get is_pipe(): boolean;
     get home(): string;
     get user(): string;
     get host(): string;

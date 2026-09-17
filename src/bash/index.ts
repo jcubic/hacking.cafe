@@ -192,6 +192,12 @@ export class Bash implements BashInterpreter {
         };
     }
 
+    // -------------------------------------------------------------------------
+    get is_pipe() {
+        return this._pipe;
+    }
+    // -------------------------------------------------------------------------
+
     get commands() {
         return Object.keys(this._commands);
     }

@@ -43,6 +43,7 @@ const DEBUG = DEV;
 
 const rpc_url = DEV ? 'http://localhost:8810/' : '/api/';
 
+// -----------------------------------------------------------------------------
 // shape of the object returned by the service.location() JSON-RPC method
 const LocationSchema = z.object({
     ip: z.string(),
@@ -59,12 +60,12 @@ const LocationSchema = z.object({
     is_proxy: z.boolean()
 });
 
+// -----------------------------------------------------------------------------
 class BufferTerminalOutput extends BufferOutput {
     protected _term: JQueryTerminal;
     constructor(term: JQueryTerminal) {
         super();
         this._term = term;
-        this._buffer = [];
     }
     flush() {
         if (this._buffer.length) {
@@ -76,6 +77,7 @@ class BufferTerminalOutput extends BufferOutput {
     }
 }
 
+// -----------------------------------------------------------------------------
 class Input implements Stdin {
     protected _term: JQueryTerminal;
     protected _lines: string[] | null;
@@ -123,17 +125,23 @@ class Input implements Stdin {
         return ret;
     }
     async read_line() {
-        const ret: Promise<string> = new Promise((resolve, reject) => {
+        const ret: Promise<string | null> = new Promise((resolve, reject) => {
             this._term.push(function(command) {
                 this.pop();
-                resolve(command);
+                resolve(command + '\n');
             }, {
                 prompt: '',
                 keymap: {
-                    'CTRL+C': function() {
+                    'CTRL+C': function(e) {
+                        e.preventDefault();
                         this.echo('^C');
                         this.pop();
                         reject(new Error('ABORT'));
+                    },
+                    'CTRL+D': function(e) {
+                        this.pop();
+                        e.preventDefault();
+                        resolve(null);
                     }
                 }
             });
@@ -145,6 +153,7 @@ class Input implements Stdin {
     }
 }
 
+// -----------------------------------------------------------------------------
 const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;

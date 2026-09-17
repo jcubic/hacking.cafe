@@ -143,18 +143,26 @@ export async function cd(this: BashContext, dir?: string) {
 
 // -----------------------------------------------------------------------------
 export async function cat(this: BashContext, ...args: string[]) {
-    let content;
     if (args.length === 0) {
-        content = await this.stdin.read();
+        while (true) {
+            const line = await this.stdin.read_line();
+            if (line === null) {
+                break;
+            }
+            this.stdout.write(line);
+            // we use buffered output we need to flush but not when using pipe
+            if (!this.bash.is_pipe) {
+                this.stdout.flush();
+            }
+        }
     } else {
         const files = [];
         for (const name of args) {
             const filename = this.bash.resolve_path(name);
             files.push(await this.fs.readFile(filename, 'utf8'));
         }
-        content = files.join('');
+        this.stdout.write(files.join(''));
     }
-    this.stdout.write(content);
 }
 
 // -----------------------------------------------------------------------------

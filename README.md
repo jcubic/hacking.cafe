@@ -12,6 +12,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `~/.bashrc` and `/etc/bashrc` files
 - [x] `$PS1` variable
 - [x] `$PATH` variable
+- [x] `$IFS` variable
 - [x] subshells
 - [x] If statements
 - [x] and/or expressions
@@ -43,17 +44,18 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] process substitution `<(command)` and `>(command)`
 - [ ] extract commands like `cat` or `grep` into scripts in `/bin`
 - [ ] glob patterns
-- [ ] `test` command
+- [x] `test` command
 - [ ] aliases and functions
 - [ ] order: keywords => aliases => function => builtins => executables
 - [ ] `printf`
 - [ ] `pushd`/`popd`
-- [ ] `for`, `while`, `until`
-- [ ] `while read line`
+- [x] `while`, `until`
+- [ ] `for`
+- [x] `while read line`
 - [ ] `case esac`
 - [ ] `$0`-`$9`
 - [ ] `$@` / `$*` / `$#`
-- [ ] `read -p "contunue? (y/n) "`
+- [x] `read -p "contunue? (y/n) "`
 - [ ] history
 - [ ] export / unset
 - [ ] completion
