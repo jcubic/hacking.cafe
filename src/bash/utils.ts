@@ -292,3 +292,35 @@ export function escape(text: string) {
     text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return text;
 }
+
+// -----------------------------------------------------------------------------
+// Converts a standard POSIX Shell Glob pattern into a JavaScript RegExp.
+// Supports: *, ?, and character classes like [a-z], [!0-9] / [^0-9]
+// -----------------------------------------------------------------------------
+export function glob_to_regex(glob: string, greedy = false) {
+    const modifier = greedy ? '' : '?';
+    const escape = '-\\^$+.()|{}/';
+    let result = '';
+    for (let i = 0; i < glob.length; i++) {
+        const char = glob[i];
+        if (char === '*') {
+            result += '.*' + modifier;
+        } else if (char === '?') {
+            result += '.';
+        } else if (char === '[') {
+            const end = glob.indexOf(']', i + 1);
+            if (end === -1) {
+                result += '\\[';
+            } else {
+                const set = glob.slice(i + 1, end);
+                result += '[' + (set[0] === '!' ? '^' + set.slice(1) : set) + ']';
+                i = end;
+            }
+        } else if (escape.includes(char)) {
+            result += '\\' + char;
+        } else {
+            result += char;
+        }
+    }
+    return result;
+}

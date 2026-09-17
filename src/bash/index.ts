@@ -36,7 +36,8 @@ import type {
     ParsedScript,
     CompoundList,
     DoubleQuotedPart,
-    DoubleQuotedChild
+    DoubleQuotedChild,
+    ParameterExpansionPart
 } from 'unbash';
 
 type AstNode = Node | Script | ParsedScript;
@@ -57,7 +58,7 @@ import { fs_constants } from './constants';
 
 import * as builtins from './commands';
 
-import { date, char, import_module, list_executables } from './utils';
+import { date, char, import_module, list_executables, glob_to_regex } from './utils';
 
 export { color } from './utils';
 
@@ -132,6 +133,10 @@ class PipeStdin implements Stdin {
 }
 
 type Module = BashInterpreter | PromisifiedFS | Stdin | Stdout;
+
+type ReplaceCallback = (pattern: string) => RegExp;
+type GlobCallback = (pattern: string) => string;
+
 
 /*
  * Bash class is more like a Unix system
@@ -655,20 +660,7 @@ export class Bash implements BashInterpreter {
                 break;
             }
             case 'ParameterExpansion': {
-                if (ast.operator) {
-                    switch (ast.operator) {
-                        case '/':
-                            if (ast.replace) {
-                                const variable = this.variable('$' + ast.parameter);
-                                const repl = ast.replace;
-                                const pattern = await this.resolve(repl.pattern);
-                                const replace = await this.resolve(repl.replacement);
-                                return variable.toString().replace(pattern, replace);
-                            }
-                    }
-                    throw new Error(`Unkown Bash substitution ${ast.text}`);
-                }
-                return this.variable('$' + ast.parameter);
+                return this.expansion(ast);
             }
             case 'CommandExpansion':
                 const bash = this.fork();
@@ -681,6 +673,74 @@ export class Bash implements BashInterpreter {
             case 'ArithmeticExpansion':
         }
         throw new Error(`Unkown Bash expression ${ast.text}`);
+    }
+
+    // -------------------------------------------------------------------------
+    protected async replace(ast: ParameterExpansionPart, callback: ReplaceCallback) {
+        if (ast.replace) {
+            const variable = this.variable('$' + ast.parameter);
+            const repl = ast.replace;
+            let pattern;
+            if (!repl.pattern.parts) {
+                pattern = callback(glob_to_regex(repl.pattern.value));
+            } else {
+                pattern = await this.resolve(repl.pattern);
+            }
+            const replacement = await this.resolve(repl.replacement);
+            return variable.toString().replace(pattern, replacement);
+        }
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
+    protected async trim(ast: ParameterExpansionPart, front: boolean, callback: GlobCallback) {
+        if (ast.operand) {
+            const variable = this.variable('$' + ast.parameter);
+            let operand;
+            if (!ast.operand.parts) {
+                operand = callback(ast.operand.value);
+            } else {
+                operand = await this.resolve(ast.operand);
+            }
+            const re = new RegExp(front ? '^' + operand : operand + '$');
+            console.log({ front, re });
+            return variable.toString().replace(re, '');
+        }
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
+    protected async expansion(ast: ParameterExpansionPart) {
+        if (ast.operator) {
+            switch (ast.operator) {
+                case '/':
+                    return this.replace(ast, (pattern) => {
+                        return new RegExp(pattern);
+                    });
+                case '//':
+                    return this.replace(ast, (pattern) => {
+                        return new RegExp(pattern, 'g');
+                    });
+                case '#':
+                    return this.trim(ast, true, (pattern) => {
+                        return glob_to_regex(pattern, false);
+                    });
+                case '##':
+                    return this.trim(ast, true, (pattern) => {
+                        return glob_to_regex(pattern, true);
+                    });
+                case '%':
+                    return this.trim(ast, false, (pattern) => {
+                        return glob_to_regex(pattern, false);
+                    });
+                case '%%':
+                    return this.trim(ast, false, (pattern) => {
+                        return glob_to_regex(pattern, true);
+                    });
+            }
+            throw new Error(`Unkown Bash substitution ${ast.text}`);
+        }
+        return this.variable('$' + ast.parameter);
     }
 
     // -------------------------------------------------------------------------

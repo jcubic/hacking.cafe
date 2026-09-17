@@ -27,11 +27,12 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ]: `USER_ID=${1:?"Error, arg missing!"}`
   - [ ]: `${var:+alternative}`
   - [x]: `${VAR/x/y}` - replace
+  - [x]: `${VAR//x/y}` - replace all
   - [ ]: `${TEXT:4}` `${TEXT:0:4}` - substring
   - [ ]: `${FILE%.*}` - remove traling non-greedy
   - [ ]: `${PATH%%:*}` remove traling greedy
-  - [ ]: `${PATH##*/}` - remove greedy before
-  - [ ]: `EXTENSION=${FILE#*.}` remove before
+  - [x]: `${PATH##*/}` - remove greedy before
+  - [x]: `EXTENSION=${FILE#*.}` remove before
   - [ ]: `${NAME^}` camel case
   - [ ]: `${NAME^^}` upper case
   - [ ]: `LEN=${#NAME}` - string length
