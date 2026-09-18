@@ -20,6 +20,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `$PWD` variable
 - [x] subshells
 - [x] If statements
+- [x] case expressions
 - [x] and/or expressions
 - [x] double-quote expressions
 - [x] variable assignments

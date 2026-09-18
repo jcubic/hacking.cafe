@@ -27,6 +27,7 @@ import type {
     If,
     Node,
     Word,
+    Case,
     AndOr,
     While,
     Script,
@@ -1243,6 +1244,31 @@ export class Bash implements BashInterpreter, Process {
         } else if (ast.else) {
             await this.dispatch(ast.else);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    protected async Case(ast: Case) {
+        const word = await this.resolve(ast.word);
+        let result = 0;
+        for (const item of ast.items) {
+            for (const pattern of item.pattern) {
+                if (pattern.value === '*') {
+                    result = await this.dispatch(item.body);
+                    if (item.terminator) {
+                        return result;
+                    }
+                } else {
+                    const value = await this.resolve(pattern);
+                    if (word === value) {
+                        result = await this.dispatch(item.body);
+                        if (item.terminator) {
+                            return result;
+                        }
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------
