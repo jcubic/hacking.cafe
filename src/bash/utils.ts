@@ -293,7 +293,7 @@ export function parse_mode(str: string, mode: number): number {
 // hepler function to prevent vite to preload the URL
 // -----------------------------------------------------------------------------
 export async function import_module(module: string) {
-    return (await import(module)).default;
+    return (await import(/* @vite-ignore */module)).default;
 }
 
 // -----------------------------------------------------------------------------
