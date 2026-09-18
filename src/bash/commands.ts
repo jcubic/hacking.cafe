@@ -28,14 +28,14 @@ import type { BashContext, Stats, UserData } from './types';
 
 import {
     char,
-    make_directory,
     rmdir,
     list_dir,
-    mode_to_string,
     file_date,
+    parse_mode,
     format_bytes,
     is_permission,
-    parse_mode
+    mode_to_string,
+    make_directory
 } from './utils';
 
 // -----------------------------------------------------------------------------
