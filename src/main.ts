@@ -282,6 +282,52 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                 }
             }
         },
+        async vi(this: BashContext, arg?: string): Promise<number> {
+            if (!arg) {
+                throw new Error('Usage: vi [filename]');
+            }
+            const vi = (await import('jsvi')).default;
+            return new Promise(async (resolve, reject) => {
+                const $node = $('#vi') as JQuery<HTMLTextAreaElement>;
+                const textarea = $node.get(0) as HTMLTextAreaElement;
+                let content;
+                let stat;
+                const filename = this.bash.resolve_path(arg);
+                try {
+                    const stat = await this.fs.stat(filename);
+                    if (stat.isFile()) {
+                        content = await this.fs.readFile(filename, 'utf8');
+                    }
+                } catch(e) {
+                }
+                if (stat && content === undefined) {
+                    throw new Error(`Invalid file ${arg}`);
+                }
+                content ??= '';
+                $node.val(content);
+                term.blur();
+                let write_promise: Promise<void>;
+                const editor = vi(textarea, {
+                    color: 'var(--color)',
+                    backgroundColor: 'var(--background)',
+                    padding: 10,
+                    onSave: async() => {
+                        const content = editor.freeze();
+                        await write_promise;
+                        try {
+                            write_promise = this.fs.writeFile(filename, content);
+                        } catch(e) {
+                            term.focus();
+                            reject(new Error((e as Error).message));
+                        }
+                    },
+                    onExit: () => {
+                        term.focus();
+                        resolve(0);
+                    }
+                });
+            });
+        },
         // ---------------------------------------------------------------------
         credits(this: BashContext) {
             const text = [
