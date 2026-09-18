@@ -17,11 +17,18 @@
  *  along with Hacking Cafe.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
+const root = fileURLToPath(new URL('.', import.meta.url));
+
 export default defineConfig({
     resolve: {
+        alias: {
+            '~': root
+        },
         // npm-linked packages (e.g. jquery.terminal during local dev) resolve
         // to their real path outside node_modules, which breaks Rollup's
         // CJS/ESM interop detection for the build unless symlinks are preserved

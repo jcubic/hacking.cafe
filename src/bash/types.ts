@@ -91,13 +91,14 @@ export interface BashInterpreter {
     get home(): string;
     get user(): string;
     get host(): string;
+    get version(): string;
     get env(): Environment;
     get cwd(): string;
     set cwd(dir: string);
-    fork(): BashInterpreter;
-    kill(pid: number): Promise<void>;
     get procs(): ProcessData[];
     init(): Promise<void>;
+    fork(): BashInterpreter;
+    kill(pid: number): Promise<void>;
     users(): Promise<UserData[]>;
     executables(dir: string): Promise<string[]>;
     resolve_path(path: string): string;

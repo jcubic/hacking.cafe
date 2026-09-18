@@ -13,6 +13,10 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "resolveJsonModule": true,
+    "paths": {
+        "~/*": ["./*"]
+    },
 
     /* Linting */
     "strict": true,

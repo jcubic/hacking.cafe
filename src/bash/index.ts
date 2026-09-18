@@ -61,6 +61,8 @@ import { fs_constants } from './constants';
 
 import proceess_wrapper from './process.js?raw';
 
+import { version } from '~/package.json';
+
 import * as builtins from './commands';
 
 import { date, char, import_module, list_executables, glob_to_regex } from './utils';
@@ -202,6 +204,11 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected get temp_vars() {
         return this._tmp_env;
+    }
+
+    // -------------------------------------------------------------------------
+    get version() {
+        return version;
     }
 
     // -------------------------------------------------------------------------
@@ -455,8 +462,8 @@ export class Bash implements BashInterpreter, Process {
     // PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
     // -------------------------------------------------------------------------
     prompt() {
-        const prompt = this.get_variable('$PS1') as string || '\\$ ';
-        return prompt.replace(/\\([dhHjlstT@uvVwW!#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
+        const prompt = this.get_variable('PS1') as string;
+        return prompt.replace(/\\([dhHjlstT@uvVwW!$#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
             if (seq.match(/^[0-7]+$/)) {
                 return char(parseInt(seq, 8));
             }
@@ -464,7 +471,9 @@ export class Bash implements BashInterpreter, Process {
                 case '\\':
                     return '\\';
                 case 's':
-                    return 'bash';
+                    return path.basename(this.name);
+                case 'v':
+                    return this.version;
                 case '$':
                     // # for root
                     return '$';
@@ -520,7 +529,7 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     private async find_name(command: string): Promise<string | null> {
         try {
-            const PATH = this.get_variable('$PATH') as string;
+            const PATH = this.get_variable('PATH') as string;
             const paths = PATH.split(':')
             try {
                 const pathname = this.resolve_path(command);
@@ -591,22 +600,24 @@ export class Bash implements BashInterpreter, Process {
             return this._globals[name];
         }
         switch (name) {
-            case '$HOSTNAME':
+            case 'PS1':
+                return '\\s-\\v\\$ ';
+            case 'HOSTNAME':
                 return this._context.host;
-            case '$USER':
+            case 'USER':
                 return this._context.user;
-            case '$IFS':
+            case 'IFS':
                 return ' \\t\\n';
-            case '$PWD':
+            case 'PWD':
                 return this.cwd;
-            case '$0':
+            case '0':
                 return path.basename(this._name);
-            case '$*':
+            case '*':
                 return this._args.join(' ');
-            case '$#':
+            case '#':
                 return this._args.length.toString();
         }
-        if (name.match(/\$[0-9]+/)) {
+        if (name.match(/^[0-9]+/)) {
             const index = parseInt(name.substring(1), 10);
             return this._args[index - 1] ?? '';
         }
@@ -762,7 +773,7 @@ export class Bash implements BashInterpreter, Process {
                     return value;
                 }
                 if (value.startsWith('$')) {
-                    return this.get_variable(value);
+                    return this.get_variable(value.substring(1));
                 }
                 break;
             }
@@ -785,7 +796,7 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected async replace(ast: ParameterExpansionPart, callback: ReplaceCallback) {
         if (ast.replace) {
-            const variable = this.get_variable('$' + ast.parameter);
+            const variable = this.get_variable(ast.parameter);
             const repl = ast.replace;
             let pattern;
             if (!repl.pattern.parts) {
@@ -817,7 +828,7 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected async trim(ast: ParameterExpansionPart, front: boolean, greedy: boolean) {
         if (ast.operand) {
-            const variable = this.get_variable('$' + ast.parameter);
+            const variable = this.get_variable(ast.parameter);
             const string = variable.toString();
             let pattern;
             if (!ast.operand.parts) {
@@ -846,7 +857,7 @@ export class Bash implements BashInterpreter, Process {
         if (ast.operand) {
             let variable;
             try {
-                variable = this.get_variable('$' + ast.parameter);
+                variable = this.get_variable(ast.parameter.substring(1));
                 if (strict && !variable) {
                     return '';
                 }
@@ -856,7 +867,7 @@ export class Bash implements BashInterpreter, Process {
             if (ast.operand && !variable) {
                 const value = await this.resolve(ast.operand);
                 if (set) {
-                    this.set_variable('$' + ast.parameter, value);
+                    this.set_variable(ast.parameter, value);
                 }
                 return value;
             }
@@ -868,7 +879,7 @@ export class Bash implements BashInterpreter, Process {
     protected async use_alternative(ast: ParameterExpansionPart, strict: boolean) {
         if (ast.operand) {
             try {
-                const variable = this.get_variable('$' + ast.parameter);
+                const variable = this.get_variable(ast.parameter);
                 if (!variable && !strict) {
                     return '';
                 }
@@ -886,7 +897,7 @@ export class Bash implements BashInterpreter, Process {
     protected async show_error(ast: ParameterExpansionPart, strict: boolean) {
         if (ast.operator) {
             try {
-                const variable = this.get_variable('$' + ast.parameter);
+                const variable = this.get_variable(ast.parameter);
                 if (!variable && !strict) {
                     throw new Error();
                 }
@@ -938,22 +949,22 @@ export class Bash implements BashInterpreter, Process {
                 case ':?':
                     return this.show_error(ast, false);
                 case '^': {
-                    const variable = this.get_variable('$' + ast.parameter).toString();
+                    const variable = this.get_variable(ast.parameter).toString();
                     return variable[0].toUpperCase() + variable.substring(1);
                 }
                 case '^^': {
-                    const variable = this.get_variable('$' + ast.parameter).toString();
+                    const variable = this.get_variable(ast.parameter).toString();
                     return variable.toUpperCase();
                 }
             }
             throw new Error(`Unkown Bash substitution ${ast.text}`);
         }
-        const variable = this.get_variable('$' + ast.parameter);
+        const variable = this.get_variable(ast.parameter);
         if (ast.length) {
             return variable.length;
         }
         if (ast.indirect) {
-            return this.get_variable('$' + variable);
+            return this.get_variable(variable as string);
         }
         if (ast.slice) {
             const offset = parseInt(await this.resolve(ast.slice.offset), 10);
@@ -1055,8 +1066,8 @@ export class Bash implements BashInterpreter, Process {
             // delete function
         } else {
             for (const variable of options._) {
-                delete this._globals['$' + variable];
-                delete this._locals['$' + variable];
+                delete this._globals[variable];
+                delete this._locals[variable];
             }
         }
         return 0;
@@ -1074,7 +1085,9 @@ export class Bash implements BashInterpreter, Process {
                 const [ prefix ] = ast.prefix;
                 if (prefix.type === 'Assignment' && prefix.value) {
                     const value = await this.resolve(prefix.value);
-                    this.set_variable('$' + prefix.name, value);
+                    if (prefix.name) {
+                        this.set_variable(prefix.name, value);
+                    }
                 }
             });
         }
@@ -1211,7 +1224,7 @@ export class Bash implements BashInterpreter, Process {
     protected async Statement(ast: Statement) {
         let promise = this.dispatch(ast.command);
         if (ast.background) {
-            this.set_variable('$?', '0');
+            this.set_variable('?', '0');
             return 0;
         }
         return promise;
@@ -1219,7 +1232,7 @@ export class Bash implements BashInterpreter, Process {
         if (code === undefined) {
             code = 0;
         }
-        this.set_variable('$?', code.toString());
+        this.set_variable('?', code.toString());
         return code;
     }
 }
