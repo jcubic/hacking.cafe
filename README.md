@@ -54,6 +54,9 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] functions
 - [ ] order: keywords => aliases => function => builtins => executables
 - [x] `printf`
+- [x] `kill`
+- [x] `ps`
+- [ ] `type`
 - [x] `pushd`/`popd`
 - [x] `while`, `until`
 - [ ] `for`

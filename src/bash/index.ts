@@ -82,7 +82,7 @@ type ReplaceCallback = (pattern: string) => RegExp;
 
 interface Process {
     get pid(): number;
-    kill(): void;
+    terminate(): void;
     get name(): string;
 }
 
@@ -95,7 +95,7 @@ class WorkerProcess implements Process {
         this._worker = worker;
         this._name = name;
     }
-    public kill() {
+    public terminate() {
         this._worker.terminate();
     }
     get name() {
@@ -143,8 +143,8 @@ export class Bash implements BashInterpreter, Process {
         this._channel = new BroadcastChannel('__ipc__');
         this._pipe = this._export = this._tmp = false;
         this._args = [];
-        this._name = 'bash';
-        this._PID = 0; // default
+        this._name = '/bin/bash';
+        this._PID = this.next_pid;
         Bash._procs.push(this);
         this._modules = {
             fs: () => this.fs,
@@ -156,6 +156,27 @@ export class Bash implements BashInterpreter, Process {
             '$.terminal': () => $.terminal
         };
         this.init_ipc_channel();
+    }
+
+    // -------------------------------------------------------------------------
+    get procs() {
+        return Bash._procs.map((proc: Process) => {
+            const { name, pid } = proc;
+            return {
+                name: path.basename(name),
+                path: name,
+                pid
+            };
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    private get next_pid() {
+        if (!Bash._procs.length) {
+            return 0;
+        }
+        const last = Bash._procs.at(-1) as Process;
+        return last.pid + 1;
     }
 
     // -------------------------------------------------------------------------
@@ -235,12 +256,27 @@ export class Bash implements BashInterpreter, Process {
         // we set interal env using public read only getter
         bash._globals = this.env;
         bash.cwd = this.cwd;
-        bash._PID = this._PID + 1;
+        bash._PID = this.next_pid;
         return bash;
     }
 
     // -------------------------------------------------------------------------
-    public kill() {
+    public async kill(pid: number) {
+        if (pid === 0) {
+            throw new Error(`bash: kill: you can't kill \`${pid}' process`);
+        }
+        for (const [index, process] of Object.entries(Bash._procs)) {
+            if (process.pid == pid) {
+                await process.terminate();
+                Bash._procs.splice(parseInt(index), 1);
+                return;
+            }
+        }
+        throw new Error(`bash: kill: \`${pid}': not a pid`);
+    }
+
+    // -------------------------------------------------------------------------
+    public terminate() {
         this.remove_proces(this.pid);
         throw new Stop();
     }
@@ -330,9 +366,8 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     private async exec_bash(filename: string, file: string, args: string[]) {
         const bash = this.fork();
-        const name = path.basename(filename);
         Object.assign(bash._globals, this._tmp_env);
-        bash._name = name;
+        bash._name = filename;
         bash._args = args;
         const code = await bash.evaluate(file);
         this.remove_proces(bash.pid);
@@ -559,7 +594,7 @@ export class Bash implements BashInterpreter, Process {
             return this.cwd;
         }
         if (name === '$0') {
-            return this._name;
+            return path.basename(this._name);
         }
         if (name === '$*') {
             return this._args.join(' ');
@@ -1027,6 +1062,9 @@ export class Bash implements BashInterpreter, Process {
     // command can be a user script (from fs) or builtin command
     // -------------------------------------------------------------------------
     protected async Command(ast: Command) {
+        // save variables in tmp so we can restore it into globals
+        // in `export NAME=VAR` or add it to the child process
+        // `NAME=VAR program`
         if (ast.prefix.length) {
             await this.with_temp_vars(async () => {
                 const [ prefix ] = ast.prefix;
@@ -1063,6 +1101,8 @@ export class Bash implements BashInterpreter, Process {
             if (typeof this[builtin] === 'function') {
                 return this[builtin](args);
             }
+            // input redirects run before the command they need
+            // setup and teardown so they use exec as a callback
             const [input_redir, output_redir] = this.split_redirects(ast);
             const { stdout, stderr } = this._context;
             if (input_redir.length) {
@@ -1072,6 +1112,8 @@ export class Bash implements BashInterpreter, Process {
                     });
                 }
             } else {
+                // we use silet output so the process can use
+                // flush even if the output is redirected to to a file
                 if (output_redir.length) {
                     this._context.stdout = new SilientOutput();
                     this._context.stderr = new SilientOutput();
@@ -1087,6 +1129,7 @@ export class Bash implements BashInterpreter, Process {
             }
         } catch(e) {
             code = 1;
+            // process was killed
             if (e instanceof Stop) {
                 return code;
             }
@@ -1098,7 +1141,6 @@ export class Bash implements BashInterpreter, Process {
             stdout.flush();
         }
         this._tmp_env = Object.create(null);
-        this.set_variable('$?', code.toString());
         return code;
     }
 
@@ -1162,11 +1204,18 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    protected Statement(ast: Statement) {
-        let code = this.dispatch(ast.command);
+    protected async Statement(ast: Statement) {
+        let promise = this.dispatch(ast.command);
         if (ast.background) {
+            this.set_variable('$?', '0');
             return 0;
         }
+        return promise;
+        let code = await promise;
+        if (code === undefined) {
+            code = 0;
+        }
+        this.set_variable('$?', code.toString());
         return code;
     }
 }

@@ -533,3 +533,22 @@ export async function popd(this: BashContext) {
     await this.bash.exec('dirs');
     return 0;
 }
+
+// -----------------------------------------------------------------------------
+export async function kill(this: BashContext, _pid?: string) {
+    if (!_pid) {
+        throw new Error('usage: kill [PID]');
+    }
+    const pid = parseInt(_pid, 10);
+    await this.bash.kill(pid);
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
+export async function ps(this: BashContext) {
+    this.stdout.writeln('PID'.padStart(5, ' ') + ' ' + 'CMD'.padStart(8, ' '));
+    this.stdout.writeln(this.bash.procs.map(proc => {
+        return proc.pid.toString().padStart(5, ' ') + ' ' + proc.name.padStart(8, ' ');
+    }).join('\n'));
+    return 0;
+}

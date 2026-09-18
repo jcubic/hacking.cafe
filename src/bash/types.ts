@@ -79,6 +79,12 @@ export type UserData = {
     text: string;
 }
 
+type ProcessData = {
+    name: string;
+    path: string;
+    pid: number;
+};
+
 export interface BashInterpreter {
     get commands(): string[];
     get is_pipe(): boolean;
@@ -89,6 +95,8 @@ export interface BashInterpreter {
     get cwd(): string;
     set cwd(dir: string);
     fork(): BashInterpreter;
+    kill(pid: number): Promise<void>;
+    get procs(): ProcessData[];
     init(): Promise<void>;
     users(): Promise<UserData[]>;
     executables(dir: string): Promise<string[]>;
