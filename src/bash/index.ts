@@ -751,14 +751,25 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
+    protected async parts(ast: WordPart[]): Promise<Variable[]> {
+        return Promise.all(ast.map((part) => {
+            return this.simple(part);
+        }));
+    }
+
+    // -------------------------------------------------------------------------
     protected async resolve(ast: Word): Promise<string> {
         if (!ast.parts?.length) {
             return ast.value;
         }
-        const result = await Promise.all(ast.parts.map((part) => {
-            return this.simple(part);
-        }));
-        return result.join('');
+        const result = await this.parts(ast.parts);
+        // arrays are resolved to the first element
+        return result.map(part => {
+            if (Array.isArray(part)) {
+                return part[0];
+            }
+            return part;
+        }).join('');
     }
 
     // -------------------------------------------------------------------------
@@ -966,10 +977,14 @@ export class Bash implements BashInterpreter, Process {
         }
         const variable = this.get_variable(ast.parameter);
         if (ast.length) {
-            return variable.length;
+            return variable.length.toString();
         }
         if (ast.indirect) {
             return this.get_variable(variable as string);
+        }
+        if (ast.index !== undefined) {
+            const index = parseInt(ast.index, 10);
+            return variable[index];
         }
         if (ast.slice) {
             const offset = parseInt(await this.resolve(ast.slice.offset), 10);
@@ -1088,9 +1103,14 @@ export class Bash implements BashInterpreter, Process {
         if (ast.prefix.length) {
             await this.with_temp_vars(async () => {
                 const [ prefix ] = ast.prefix;
-                if (prefix.type === 'Assignment' && prefix.value) {
-                    const value = await this.resolve(prefix.value);
-                    if (prefix.name) {
+                if (prefix.type === 'Assignment') {
+                    let value;
+                    if (prefix.value) {
+                        value = await this.resolve(prefix.value);
+                    } else if (prefix.array) {
+                        value = await this.words(prefix.array);
+                    }
+                    if (prefix.name && value !== undefined) {
                         this.set_variable(prefix.name, value);
                     }
                 }

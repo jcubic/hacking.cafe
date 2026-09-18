@@ -45,7 +45,7 @@ export type Commands = {
     [key: string]: BashCommand;
 };
 
-export type Variable = string | string[] | {[key: string]: string};
+export type Variable = string | string[];
 
 export type Environment = {
     [key: string]: Variable;

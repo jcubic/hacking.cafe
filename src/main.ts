@@ -375,6 +375,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     // for debugging
     (window as any).term = term;
     (term as any).fs = fs;
+    (term as any).bash = bash;
 
     // intialize the file system after update or deleting of files
     const paths = await service.init_list() as ListDir;
