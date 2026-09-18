@@ -1,6 +1,14 @@
 <?php
 
 /**
+ * True only when running under PHP's built-in development server
+ * (php -S ...), never under Apache/mod_php or PHP-FPM in production.
+ */
+function is_dev_server() {
+    return php_sapi_name() === 'cli-server';
+}
+
+/**
  * Finds path, relative to the given root folder, of all files and directories in the given directory and its sub-directories non recursively.
  * Will return an array of the form
  * array(

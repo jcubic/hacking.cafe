@@ -37,6 +37,7 @@ export default defineConfig({
                         '!api/**/.env*',
                         '!api/**/*.db',
                         '!api/**/#*#',
+                        '!api/**/.gitkeep',
                         '!api/**/*~'
                     ],
                     dest: '.'

@@ -188,6 +188,15 @@ class Service extends RequestCache {
     // ------------------------------------------------------------------------
     public function init_list() {
         $lists = read_all_files('.' . DIRECTORY_SEPARATOR . 'fs' . DIRECTORY_SEPARATOR);
+        if (is_dev_server()) {
+            // in production these are already excluded by vite.config.ts's
+            // copy targets, so they never reach the deployed api/fs directory;
+            // the dev server serves api/fs straight from disk, so filter here
+            $lists['files'] = array_values(array_filter($lists['files'], function($path) {
+                $name = basename($path);
+                return $name !== '.gitkeep' && !preg_match('/~$|^#.*#$/', $name);
+            }));
+        }
         foreach ($lists as $name => $list) {
             $lists[$name] = array_map(function($path) {
                 return preg_replace("%\\./fs%", "", $path);
