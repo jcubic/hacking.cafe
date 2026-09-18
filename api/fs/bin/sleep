@@ -25,4 +25,3 @@ async function main(arg) {
         throw new Error('Usaeg: sleep [time][SUFFIX]');
     }
 }
-
