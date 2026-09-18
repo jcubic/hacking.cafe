@@ -618,7 +618,7 @@ export class Bash implements BashInterpreter, Process {
                 return this._args.length.toString();
         }
         if (name.match(/^[0-9]+/)) {
-            const index = parseInt(name.substring(1), 10);
+            const index = parseInt(name, 10);
             return this._args[index - 1] ?? '';
         }
         return '';
