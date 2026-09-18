@@ -23,6 +23,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] and/or expressions
 - [x] double-quote expressions
 - [x] variable assignments
+- [ ] arrays
 - [x] pipes
 - [x] redirects (`>` and `<`)
 - [x] JavaScript programs using web workers

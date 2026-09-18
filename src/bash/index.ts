@@ -692,6 +692,7 @@ export class Bash implements BashInterpreter, Process {
         for (const redirect of ast.redirects) {
             if (redirect.target) {
                 switch (redirect.operator) {
+                    case '>>':
                     case '>':
                         output.push(redirect);
                         break;
@@ -709,7 +710,7 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected async redirect(ast: Redirect, callback?: () => TypeOrPromise<void>) {
         if (ast.target) {
-            switch (ast.operator) {
+            switch (ast.operator[0]) {
                 case '>': {
                     const { fs, stdout, stderr } = this._context;
                     // TODO: resolve ast.target
@@ -722,6 +723,10 @@ export class Bash implements BashInterpreter, Process {
                     } else {
                         content = stdout.output();
                         stdout.clear();
+                    }
+                    if (ast.operator === '>>') {
+                        const file = await fs.readFile(fullname, 'utf8');
+                        content = file + content;
                     }
                     await fs.writeFile(fullname, content);
                     break;
