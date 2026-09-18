@@ -1163,6 +1163,10 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     protected Statement(ast: Statement) {
-        return this.dispatch(ast.command);
+        let code = this.dispatch(ast.command);
+        if (ast.background) {
+            return 0;
+        }
+        return code;
     }
 }
