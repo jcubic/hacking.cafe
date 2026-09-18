@@ -80,7 +80,35 @@ export { BufferOutput };
 
 type ReplaceCallback = (pattern: string) => RegExp;
 
-export class Bash implements BashInterpreter {
+interface Process {
+    get pid(): number;
+    kill(): void;
+    get name(): string;
+}
+
+class WorkerProcess implements Process {
+    private _pid: number;
+    private _worker: Worker;
+    private _name: string;
+    constructor(pid: number, name: string, worker: Worker) {
+        this._pid = pid;
+        this._worker = worker;
+        this._name = name;
+    }
+    public kill() {
+        this._worker.terminate();
+    }
+    get name() {
+        return this._name;
+    }
+    get pid() {
+        return this._pid;
+    }
+}
+
+class Stop {}
+
+export class Bash implements BashInterpreter, Process {
     // object containing builtin and user commands
     private _commands: Commands;
     // globals are variables with export
@@ -104,6 +132,8 @@ export class Bash implements BashInterpreter {
     private _tmp: boolean;
     private _args: string[];
     private _name: string;
+    private _PID: number;
+    private static _procs: Process[] = [];
     constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
         this._commands = { ...builtins, ...commands };
         this._context = { ...context, cwd: context.home, bash: this };
@@ -114,6 +144,8 @@ export class Bash implements BashInterpreter {
         this._pipe = this._export = this._tmp = false;
         this._args = [];
         this._name = 'bash';
+        this._PID = 0; // default
+        Bash._procs.push(this);
         this._modules = {
             fs: () => this.fs,
             bash: () => this,
@@ -124,6 +156,16 @@ export class Bash implements BashInterpreter {
             '$.terminal': () => $.terminal
         };
         this.init_ipc_channel();
+    }
+
+    // -------------------------------------------------------------------------
+    get name() {
+        return this._name;
+    }
+
+    // -------------------------------------------------------------------------
+    get pid() {
+        return this._PID;
     }
 
     // -------------------------------------------------------------------------
@@ -193,7 +235,14 @@ export class Bash implements BashInterpreter {
         // we set interal env using public read only getter
         bash._globals = this.env;
         bash.cwd = this.cwd;
+        bash._PID = this._PID + 1;
         return bash;
+    }
+
+    // -------------------------------------------------------------------------
+    public kill() {
+        this.remove_proces(this.pid);
+        throw new Stop();
     }
 
     // -------------------------------------------------------------------------
@@ -257,6 +306,47 @@ export class Bash implements BashInterpreter {
     }
 
     // -------------------------------------------------------------------------
+    private exec_worker(filename: string, file: string, args: string[]) {
+        const pid = this.pid + 1;
+        const code = this.process(file, args);
+        const blob = new Blob([code], {
+            type: 'application/javascript'
+        });
+        const worker = new Worker(URL.createObjectURL(blob), {
+            type: 'module'
+        });
+        Bash._procs.push(new WorkerProcess(pid, filename, worker));
+        return new Promise<number>((resolve) => {
+            worker.addEventListener('message', message => {
+                if ('exit' in message.data) {
+                    const code = message.data.exit;
+                    this.remove_proces(pid);
+                    resolve(code);
+                }
+            });
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    private async exec_bash(filename: string, file: string, args: string[]) {
+        const bash = this.fork();
+        const name = path.basename(filename);
+        Object.assign(bash._globals, this._tmp_env);
+        bash._name = name;
+        bash._args = args;
+        const code = await bash.evaluate(file);
+        this.remove_proces(bash.pid);
+        return code;
+    }
+
+    // -------------------------------------------------------------------------
+    private remove_proces(pid: number) {
+        Bash._procs = Bash._procs.filter(proc => {
+            return proc.pid !== pid;
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // run user defined script (a JavaScript code) from FS
     // the file always exist and is executable when this function is called
     // -------------------------------------------------------------------------
@@ -268,29 +358,10 @@ export class Bash implements BashInterpreter {
             const interpreter = shebang[1];
             file = file.replace(re, '');
             if (interpreter === '/bin/js') {
-                const code = this.process(file, args);
-                const blob = new Blob([code], {
-                    type: 'application/javascript'
-                });
-                const worker = new Worker(URL.createObjectURL(blob), {
-                    type: 'module'
-                });
-                return new Promise((resolve) => {
-                    worker.addEventListener('message', message => {
-                        if ('exit' in message.data) {
-                            const code = message.data.exit;
-                            resolve(code);
-                        }
-                    });
-                });
+                return this.exec_worker(filename, file, args);
             }
         }
-        const bash = this.fork();
-        const name = path.basename(filename);
-        Object.assign(bash._globals, this._tmp_env);
-        bash._name = name;
-        bash._args = args;
-        return bash.evaluate(file);
+        return this.exec_bash(filename, file, args);
     }
 
     // -------------------------------------------------------------------------
@@ -1016,6 +1087,9 @@ export class Bash implements BashInterpreter {
             }
         } catch(e) {
             code = 1;
+            if (e instanceof Stop) {
+                return code;
+            }
             this._context.stderr.writeln((e as Error).message);
         }
         if (!this._pipe) {
