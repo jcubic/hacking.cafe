@@ -103,10 +103,11 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 ### Unix
 
 - [ ] permissions (enforced on the server somehow)
-- [ ] login
+- [ ] login (guest without password)
 - [ ] `/etc/issue`
 - [ ] `/etc/motd`
 - [ ] `/etc/group`
+- [ ] `CTRL+D` stop the process
 
 ## Limitations
 

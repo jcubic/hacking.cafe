@@ -1,0 +1,28 @@
+#!/bin/js
+
+async function main(arg) {
+    const m = arg?.match(/^[0-9]+([smhd]?)$/);
+    if (m) {
+        let time = parseInt(arg, 10) * 1000;
+        if (m[1]) {
+            switch (m[1]) {
+                case 's':
+                    // default
+                    break;
+                case 'd':
+                    time *= 60 * 60 * 24;
+                case 'h':
+                    time *= 60 * 60;
+                case 'm':
+                    time *= 60;
+            }
+        }
+        await new Promise(resolve => {
+            setTimeout(resolve, time);
+        });
+        return 0;
+    } else {
+        throw new Error('Usaeg: sleep [time][SUFFIX]');
+    }
+}
+

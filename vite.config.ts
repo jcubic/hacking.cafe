@@ -36,6 +36,7 @@ export default defineConfig({
                         'api/**',
                         '!api/**/.env*',
                         '!api/**/*.db',
+                        '!api/**/#*#',
                         '!api/**/*~'
                     ],
                     dest: '.'
