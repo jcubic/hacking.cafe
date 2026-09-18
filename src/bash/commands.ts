@@ -341,11 +341,11 @@ export async function read(this: BashContext, ...args: string[]) {
         for (let i = 0; i < options._.length; ++i) {
             const variable = options._[i] as string;
             const value = parts[i] ?? '';
-            this.bash.set_variable('$' + variable, value);
+            this.bash.set_variable(variable, value);
         }
     } else {
         const variable = options._.length === 0 ? 'REPLY' : options._[0];
-        this.bash.set_variable('$' + variable, input);
+        this.bash.set_variable(variable, input);
     }
     return 0;
 }
