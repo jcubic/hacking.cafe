@@ -13,6 +13,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 - [x] `~/.bashrc` and `/etc/bashrc` files
 - [x] `$PS1` variable
+  - [ ] functions in prompt (backticks)
 - [x] `$PATH` variable
 - [x] `$IFS` variable
 - [x] `$?` variable
@@ -49,7 +50,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] extract commands like `cat` or `grep` into scripts in `/bin`
 - [ ] glob patterns
 - [x] `test` command
-- [ ] aliases and functions
+- [ ] aliases
+- [ ] functions
 - [ ] order: keywords => aliases => function => builtins => executables
 - [x] `printf`
 - [x] `pushd`/`popd`
@@ -65,20 +67,52 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] unset
 - [ ] completion
 
-### Unix
+### FS
 
 - [ ] `env` command
-- [ ] script fs as REPL
+- [ ] scripts in fs as REPLs
   - [ ] `/bin/js` repl and interpreter
   - [ ] `/bin/bash` as subshell
+  - [ ] `/bin/php` using uniter [demo](https://codepen.io/jcubic/pen/VGYBVj)
+  - [ ] `/bin/head`
+  - [ ] `/bin/tail`
+  - [ ] `/bin/wc`
+  - [ ] `/bin/cut`
+  - [ ] `/bin/uniq`
+  - [ ] `/bin/sort`
+  - [ ] `/bin/tr`
+  - [ ] `/bin/cp`
+  - [ ] `/bin/mv`
+  - [ ] `/bin/readlink`
+  - [ ] `/bin/touch`
+  - [ ] `/bin/chgrp`
+  - [ ] `/bin/du`
+  - [ ] `/bin/tee`
+  - [ ] `/bin/xargs`
+  - [ ] `/bin/basename`
+  - [ ] `/bin/dirname`
+  - [ ] `/bin/mktemp`
+  - [ ] `/bin/whoami`
+  - [ ] `/bin/who`
+  - [ ] `/bin/uname`
+  - [ ] `/bin/hostname`
+  - [ ] `/bin/sleep`
+  - [ ] `/bin/vi` ([jsvi](https://github.com/jcubic/jsvi) - add to npm)
+  - [ ] `/bin/nano` ([micro](https://github.com/jcubic/jquery.micro) - add to npm)
 
+### Unix
+
+- [ ] permissions (enforced on the server somehow)
+- [ ] login
+- [ ] `/etc/issue`
+- [ ] `/etc/motd`
+- [ ] `/etc/group`
 
 ## Limitations
 
-Bash expact aliases before processing keyboards, which allows changing syntax. By design
+* Bash expands aliases before processing keyboards, which allows changing syntax. By design
 Hacking Cafe will only expand aliases as commands.
-
-`$@` works the same as `"$@"`.
+* `$@` works the same as `"$@"` (it may change).
 
 ## Commercial License
 
