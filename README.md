@@ -45,7 +45,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x] `${NAME^^}` - upper case
   - [x] `LEN=${#NAME}` - string length
   - [x] `${!POINTER}` - indirect variable
-- [ ] run in background `&` (bash in worker?)
+- [x] run in background `&`
 - [ ] process substitution `<(command)` and `>(command)`
 - [ ] extract commands like `cat` or `grep` into scripts in `/bin`
 - [ ] glob patterns
@@ -96,7 +96,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ] `/bin/who`
   - [ ] `/bin/uname`
   - [ ] `/bin/hostname`
-  - [ ] `/bin/sleep`
+  - [x] `/bin/sleep`
   - [ ] `/bin/vi` ([jsvi](https://github.com/jcubic/jsvi) - add to npm)
   - [ ] `/bin/nano` ([micro](https://github.com/jcubic/jquery.micro) - add to npm)
 
