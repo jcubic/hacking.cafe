@@ -335,12 +335,7 @@ export async function read(this: BashContext, ...args: string[]) {
     }
     input = input.replace(/\n+$/, '');
     if (options._.length > 1) {
-        let ifs;
-        try {
-            ifs = this.bash.get_variable('$IFS');
-        } catch(e) {
-        }
-        ifs ??= ' \\t\\n';
+        let ifs = this.bash.get_variable('$IFS');
         const re = new RegExp('[' + ifs + ']');
         const parts = input.split(re);
         for (let i = 0; i < options._.length; ++i) {

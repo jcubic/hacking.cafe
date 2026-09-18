@@ -590,17 +590,21 @@ export class Bash implements BashInterpreter, Process {
         if (Object.hasOwn(this._globals, name)) {
             return this._globals[name];
         }
-        if (name === '$PWD') {
-            return this.cwd;
-        }
-        if (name === '$0') {
-            return path.basename(this._name);
-        }
-        if (name === '$*') {
-            return this._args.join(' ');
-        }
-        if (name === '$#') {
-            return this._args.length.toString();
+        switch (name) {
+            case '$HOSTNAME':
+                return this._context.host;
+            case '$USER':
+                return this._context.user;
+            case '$IFS':
+                return ' \\t\\n';
+            case '$PWD':
+                return this.cwd;
+            case '$0':
+                return path.basename(this._name);
+            case '$*':
+                return this._args.join(' ');
+            case '$#':
+                return this._args.length.toString();
         }
         if (name.match(/\$[0-9]+/)) {
             const index = parseInt(name.substring(1), 10);
