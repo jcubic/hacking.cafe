@@ -350,8 +350,8 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    private exec_worker(filename: string, file: string, args: string[]) {
-        const pid = this.pid + 1;
+    protected exec_worker(filename: string, file: string, args: string[]) {
+        const pid = this.next_pid;
         const code = this.process(file, args);
         const blob = new Blob([code], {
             type: 'application/javascript'
