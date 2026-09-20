@@ -20,9 +20,6 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `$PWD` variable
 - [x] `:` and `.` shorcuts
 - [x] subshells
-- [x] If statements
-- [x] case expressions
-- [x] and/or expressions
 - [x] double-quote expressions
 - [x] variable assignments
 - [x] arrays
@@ -60,11 +57,13 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `kill`
 - [x] `ps`
 - [ ] `type`
+- [x] `if`
+- [x] `&&`/`||`
 - [x] `pushd`/`popd`
 - [x] `while`, `until`
 - [ ] `for`
 - [x] `while read line`
-- [ ] `case esac`
+- [x] `case`/`esac`
 - [x] `$0`-`$9`
 - [x] `$@` / `$*` / `$#`
 - [x] `read -p "contunue? (y/n) "`
