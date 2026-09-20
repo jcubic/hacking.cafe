@@ -109,7 +109,7 @@ class WorkerProcess implements Process {
     }
 }
 
-class Stop {}
+export class Stop {}
 
 export class Bash implements BashInterpreter, Process {
     // object containing builtin and user commands
@@ -257,6 +257,14 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     // spin a new Bash instance to run script as a new proccess, so environment
     // like variables are not modified by the script
+    // each time you call fork you need to us finally with Bash::remove_process()
+    // ```javascript
+    // bash.fork();
+    // try {
+    //   ...
+    // } finally {
+    //   bash.remove_proceess(bash.pid);
+    // }
     // -------------------------------------------------------------------------
     public fork() {
         const bash = new Bash(this._commands, this._context);
@@ -374,12 +382,15 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     private async exec_bash(filename: string, file: string, args: string[]) {
         const bash = this.fork();
-        Object.assign(bash._globals, this._tmp_env);
-        bash._name = filename;
-        bash._args = args;
-        const code = await bash.evaluate(file);
-        this.remove_proces(bash.pid);
-        return code;
+        try {
+            Object.assign(bash._globals, this._tmp_env);
+            bash._name = filename;
+            bash._args = args;
+            const code = await bash.evaluate(file);
+            return code;
+        } finally {
+            this.remove_proces(bash.pid);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -799,12 +810,16 @@ export class Bash implements BashInterpreter, Process {
             }
             case 'CommandExpansion':
                 const bash = this.fork();
-                const buffer = new SilientOutput();
-                bash._context.stdout = buffer;
-                if (ast.script) {
-                    await bash.dispatch(ast.script);
+                try {
+                    const buffer = new SilientOutput();
+                    bash._context.stdout = buffer;
+                    if (ast.script) {
+                        await bash.dispatch(ast.script);
+                    }
+                    return buffer.output().replace(/\n+$/, '');
+                } finally {
+                    this.remove_proces(bash.pid);
                 }
-                return buffer.output().replace(/\n+$/, '');
             case 'ArithmeticExpansion':
         }
         throw new Error(`Unkown Bash expression ${ast.text}`);
@@ -1022,21 +1037,25 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected async Pipeline(ast: Pipeline) {
         const bash = this.fork();
-        const { stdin, stdout, stderr } = bash._context;
-        const output = new PipeOutput();
-        const commands = [...ast.commands];
-        bash._context.stdout = output;
-        bash._pipe = true;
-        while (commands.length > 1) {
-            const command = commands.shift() as Node;
-            await bash.dispatch(command);
-            bash._context.stdin = new PipeStdin(output.output());
-            output.flush();
+        try {
+            const { stdin, stdout, stderr } = bash._context;
+            const output = new PipeOutput();
+            const commands = [...ast.commands];
+            bash._context.stdout = output;
+            bash._pipe = true;
+            while (commands.length > 1) {
+                const command = commands.shift() as Node;
+                await bash.dispatch(command);
+                bash._context.stdin = new PipeStdin(output.output());
+                output.flush();
+            }
+            Object.assign(bash._context, { stdout, stderr });
+            bash._pipe = false;
+            await bash.dispatch(commands.pop() as Node);
+            bash._context.stdin = stdin;
+        } finally {
+            this.remove_proces(bash.pid);
         }
-        Object.assign(bash._context, { stdout, stderr });
-        bash._pipe = false;
-        await bash.dispatch(commands.pop() as Node);
-        bash._context.stdin = stdin;
     }
 
     // -------------------------------------------------------------------------

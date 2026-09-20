@@ -33,7 +33,8 @@ import {
     Stdin,
     PromisifiedFS,
     BashContext,
-    Completion
+    Completion,
+    Stop
 } from './bash';
 
 const DEV = import.meta.env.DEV;
@@ -107,11 +108,10 @@ class Input implements Stdin {
                     'CTRL+C': function() {
                         this.echo('^C');
                         this.pop();
-                        reject(new Error('ABORT'));
+                        reject(new Stop());
                     },
                     'CTRL+D': function() {
                         this.pop();
-                        console.log({lines});
                         resolve(lines.join('\n') + '\n');
                         return false;
                     }
@@ -282,6 +282,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                 }
             }
         },
+        // ---------------------------------------------------------------------
         async vi(this: BashContext, arg?: string): Promise<number> {
             if (!arg) {
                 throw new Error('Usage: vi [filename]');
@@ -326,6 +327,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                         resolve(0);
                     }
                 });
+                (term as any).vi = editor;
             });
         },
         // ---------------------------------------------------------------------
