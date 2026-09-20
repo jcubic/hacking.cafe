@@ -11,7 +11,7 @@ async function main(...args) {
     const options = await parse(args);
     let content;
     if (!options.lang) {
-        await stderr.writeln('Usage: hightlight --lang <langauge> [FILE]');
+        await stderr.writeln('Usage: hightlight --lang &lt;langauge&gt; [FILE]');
         return 1;
     }
     if (options._.length === 0) {

@@ -1,19 +1,19 @@
 const __modules__ = (() => {
-    const bs = new BroadcastChannel('__ipc__');
+    const channel = new BroadcastChannel(`__ipc__:{{PID}}`);
 
     let rprc_id = 0;
 
     function call(namespace, args, method = null) {
         return new Promise((resolve, reject) => {
             const id = ++rprc_id;
-            bs.addEventListener('message', function handler({data}) {
+            channel.addEventListener('message', function handler({ data }) {
                 if (data.id === id) {
                     if (data.error) {
                         reject(data.error);
                     } else {
                         resolve(data.result);
                     }
-                    bs.removeEventListener('message', handler);
+                    channel.removeEventListener('message', handler);
                 }
             });
             const payload = {
@@ -22,7 +22,7 @@ const __modules__ = (() => {
                 method,
                 args
             };
-            bs.postMessage(payload);
+            channel.postMessage(payload);
         });
     }
 

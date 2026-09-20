@@ -143,12 +143,16 @@ export class Bash implements BashInterpreter, Process {
         this._globals = Object.create(null);
         this._locals = Object.create(null);
         this._tmp_env = Object.create(null);
-        this._channel = new BroadcastChannel('__ipc__');
         this._pipe = this._export = this._tmp = false;
         this._args = [];
         this._name = '/bin/bash';
         this._PID = this.next_pid;
         Bash._procs.push(this);
+        // channel name is scoped to this instance's pid so that workers
+        // spawned by a fork (pipeline, command substitution, script) only
+        // talk to the instance that spawned them, not to every other live
+        // Bash instance listening on a shared channel name
+        this._channel = new BroadcastChannel(`__ipc__:${this._PID}`);
         this._modules = {
             fs: () => this.fs,
             bash: () => this,
@@ -272,7 +276,6 @@ export class Bash implements BashInterpreter, Process {
         // we set interal env using public read only getter
         bash._globals = this.env;
         bash.cwd = this.cwd;
-        bash._PID = this.next_pid;
         return bash;
     }
 
@@ -303,6 +306,7 @@ export class Bash implements BashInterpreter, Process {
     private process(code: string, args: string[] = []) {
         const _args = JSON.stringify(args)
         return proceess_wrapper.replace('{{ARGS}}', _args)
+            .replace('{{PID}}', JSON.stringify(this._PID))
             .replace('{{CODE}}', code);
     }
 
@@ -396,7 +400,17 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     public remove_process(pid: number) {
         Bash._procs = Bash._procs.filter(proc => {
-            return proc.pid !== pid;
+            if (proc.pid !== pid) {
+                return true;
+            }
+            // pids get recycled (next_pid reuses the gap left by a removed
+            // process), so a fork's channel must be closed here - otherwise
+            // a later instance created with the same pid would share its
+            // channel name with this now-abandoned listener
+            if (proc instanceof Bash) {
+                proc._channel.close();
+            }
+            return false;
         });
     }
 
