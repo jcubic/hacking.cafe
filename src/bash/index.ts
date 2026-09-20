@@ -85,7 +85,7 @@ type ReplaceCallback = (pattern: string) => RegExp;
 
 interface Process {
     get pid(): number;
-    terminate(): void;
+    terminate(code?: number): void;
     get name(): string;
 }
 
@@ -109,7 +109,15 @@ class WorkerProcess implements Process {
     }
 }
 
-export class Stop {}
+export class Stop {
+    private _code: number;
+    constructor(code = 9) {
+        this._code = code;
+    }
+    get code() {
+        return this._code;
+    }
+}
 
 export class Bash implements BashInterpreter, Process {
     // object containing builtin and user commands
@@ -281,14 +289,17 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    public async kill(pid: number) {
+    public async kill(pid: number, code: number = 15) {
         if (pid === 0) {
             throw new Error(`bash: kill: you can't kill \`${pid}' process`);
         }
         for (const [index, process] of Object.entries(Bash._procs)) {
             if (process.pid == pid) {
-                await process.terminate();
-                Bash._procs.splice(parseInt(index), 1);
+                try {
+                    await process.terminate(code);
+                } finally {
+                    Bash._procs.splice(parseInt(index), 1);
+                }
                 return;
             }
         }
@@ -296,9 +307,9 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    public terminate() {
+    public terminate(code: number = 15) {
         this.remove_process(this.pid);
-        throw new Stop();
+        throw new Stop(code);
     }
 
     // -------------------------------------------------------------------------
@@ -603,18 +614,13 @@ export class Bash implements BashInterpreter, Process {
             if (!stat.isFile()) {
                 throw new Error(`bash: ${command}: Command not found`);
             }
-            const executable = fs_constants.S_IXUSR | fs_constants.S_IXGRP | fs_constants.S_IXOTH;
+            const executable = fs_constants.S_IXUSR |
+                fs_constants.S_IXGRP |
+                fs_constants.S_IXOTH;
             if ((stat.mode & executable) === 0) {
                 throw new Error(`bash: ${command}: Permission denied`);
             }
-            let code;
-            try {
-                code = await this.exec_script(filename, ...args);
-            } catch(e) {
-                this._context.stderr.writeln((e as Error).message);
-                code = 1;
-            }
-            return code;
+            return await this.exec_script(filename, ...args);
         }
     }
 
@@ -660,6 +666,13 @@ export class Bash implements BashInterpreter, Process {
         } else {
             this._locals[name] = value;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    protected async with_export_vars(callback: () => TypeOrPromise<void>) {
+        this._export = true;
+        await callback();
+        this._export = false;
     }
 
     // -------------------------------------------------------------------------
@@ -1116,6 +1129,14 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
+    protected async builtin_exit(args: string[]) {
+        const code = args.length === 1 ?
+            parseInt(args[0], 10) :
+            parseInt(this.get_variable('?') as string, 10) || 0;
+        throw new Stop(code);
+    }
+
+    // -------------------------------------------------------------------------
     protected builtin_true() {
         return 0;
     }
@@ -1216,11 +1237,11 @@ export class Bash implements BashInterpreter, Process {
                 this._context.stdout = stdout;
             }
         } catch(e) {
-            code = 1;
             // process was killed
             if (e instanceof Stop) {
-                return code;
+                return e.code;
             }
+            code = 1;
             this._context.stderr.writeln((e as Error).message);
         }
         if (!this._pipe) {
@@ -1323,7 +1344,6 @@ export class Bash implements BashInterpreter, Process {
             this.set_variable('?', '0');
             return 0;
         }
-        return promise;
         let code = await promise;
         if (code === undefined) {
             code = 0;
