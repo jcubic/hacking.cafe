@@ -98,6 +98,7 @@ export interface BashInterpreter {
     get procs(): ProcessData[];
     init(): Promise<void>;
     fork(): BashInterpreter;
+    remove_process(pid: number): void;
     kill(pid: number): Promise<void>;
     users(): Promise<UserData[]>;
     executables(dir: string): Promise<string[]>;

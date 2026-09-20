@@ -293,7 +293,7 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     public terminate() {
-        this.remove_proces(this.pid);
+        this.remove_process(this.pid);
         throw new Stop();
     }
 
@@ -372,7 +372,7 @@ export class Bash implements BashInterpreter, Process {
             worker.addEventListener('message', message => {
                 if ('exit' in message.data) {
                     const code = message.data.exit;
-                    this.remove_proces(pid);
+                    this.remove_process(pid);
                     resolve(code);
                 }
             });
@@ -389,12 +389,12 @@ export class Bash implements BashInterpreter, Process {
             const code = await bash.evaluate(file);
             return code;
         } finally {
-            this.remove_proces(bash.pid);
+            this.remove_process(bash.pid);
         }
     }
 
     // -------------------------------------------------------------------------
-    private remove_proces(pid: number) {
+    public remove_process(pid: number) {
         Bash._procs = Bash._procs.filter(proc => {
             return proc.pid !== pid;
         });
@@ -818,7 +818,7 @@ export class Bash implements BashInterpreter, Process {
                     }
                     return buffer.output().replace(/\n+$/, '');
                 } finally {
-                    this.remove_proces(bash.pid);
+                    this.remove_process(bash.pid);
                 }
             case 'ArithmeticExpansion':
         }
@@ -1054,7 +1054,7 @@ export class Bash implements BashInterpreter, Process {
             await bash.dispatch(commands.pop() as Node);
             bash._context.stdin = stdin;
         } finally {
-            this.remove_proces(bash.pid);
+            this.remove_process(bash.pid);
         }
     }
 
