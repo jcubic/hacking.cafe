@@ -382,6 +382,8 @@ export class Bash implements BashInterpreter, Process {
     protected exec_worker(filename: string, file: string, args: string[]) {
         const pid = this.next_pid;
         const code = this.process(file, args);
+        // validate the syntax before running the code in web worker
+        new Function(file);
         const blob = new Blob([code], {
             type: 'application/javascript'
         });
