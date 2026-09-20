@@ -29,12 +29,12 @@ import type { ListDir } from './bash/types';
 import { system_details } from './utils';
 import {
     Bash,
-    BufferOutput,
+    Signal,
     Stdin,
-    PromisifiedFS,
-    BashContext,
     Completion,
-    Stop
+    BashContext,
+    BufferOutput,
+    PromisifiedFS
 } from './bash';
 
 const DEV = import.meta.env.DEV;
@@ -108,7 +108,7 @@ class Input implements Stdin {
                     'CTRL+C': function() {
                         this.echo('^C');
                         this.pop();
-                        reject(new Stop());
+                        reject(new Signal(Signal.SIGINT));
                     },
                     'CTRL+D': function() {
                         this.pop();
@@ -136,7 +136,7 @@ class Input implements Stdin {
                         e.preventDefault();
                         this.echo('^C');
                         this.pop();
-                        reject(new Error('ABORT'));
+                        reject(new Signal(Signal.SIGINT));
                     },
                     'CTRL+D': function(e) {
                         this.pop();

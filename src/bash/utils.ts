@@ -334,3 +334,17 @@ export function glob_to_regex(glob: string, greedy = false) {
     }
     return result;
 }
+
+// -----------------------------------------------------------------------------
+export class Signal {
+    private _code: number;
+    static SIGINT = 2;
+    static SIGKILL = 9;
+    static SIGTERM = 15;
+    constructor(code: number) {
+        this._code = code;
+    }
+    get code() {
+        return 128 + this._code;
+    }
+}

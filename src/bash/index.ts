@@ -66,15 +66,30 @@ import { version } from '~/package.json';
 
 import * as builtins from './commands';
 
-import { date, char, import_module, list_executables, glob_to_regex } from './utils';
+import {
+    date,
+    char,
+    Signal,
+    glob_to_regex,
+    import_module,
+    list_executables
+} from './utils';
 
 export { color } from './utils';
 
 import { Completion } from './types';
 
-export { Completion };
+export { Completion, Signal };
 
-export type { Stdout, Stdin, PromisifiedFS, Environment, Commands, BashContext, ListDir };
+export type {
+    Stdout,
+    Stdin,
+    PromisifiedFS,
+    Environment,
+    Commands,
+    BashContext,
+    ListDir
+};
 
 import { complete_file, complete_directory } from './completion';
 import { BufferOutput, PipeOutput, PipeStdin, SilientOutput } from './io';
@@ -106,16 +121,6 @@ class WorkerProcess implements Process {
     }
     get pid() {
         return this._pid;
-    }
-}
-
-export class Stop {
-    private _code: number;
-    constructor(code = 9) {
-        this._code = code;
-    }
-    get code() {
-        return this._code;
     }
 }
 
@@ -289,7 +294,7 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    public async kill(pid: number, code: number = 15) {
+    public async kill(pid: number, code: number = Signal.SIGTERM) {
         if (pid === 0) {
             throw new Error(`bash: kill: you can't kill \`${pid}' process`);
         }
@@ -307,9 +312,9 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    public terminate(code: number = 15) {
+    public terminate(code: number = Signal.SIGTERM) {
         this.remove_process(this.pid);
-        throw new Stop(code);
+        throw new Signal(code);
     }
 
     // -------------------------------------------------------------------------
@@ -1133,7 +1138,7 @@ export class Bash implements BashInterpreter, Process {
         const code = args.length === 1 ?
             parseInt(args[0], 10) :
             parseInt(this.get_variable('?') as string, 10) || 0;
-        throw new Stop(code);
+        throw new Signal(code);
     }
 
     // -------------------------------------------------------------------------
@@ -1238,7 +1243,7 @@ export class Bash implements BashInterpreter, Process {
             }
         } catch(e) {
             // process was killed
-            if (e instanceof Stop) {
+            if (e instanceof Signal) {
                 return e.code;
             }
             code = 1;
