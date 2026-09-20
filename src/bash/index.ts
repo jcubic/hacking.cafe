@@ -127,7 +127,8 @@ export class Bash implements BashInterpreter, Process {
     // list of exposed modules for the webworker process
     private _modules: Record<string, () => unknown>;
     private _shorcuts = {
-        '.': 'source'
+        '.': 'source',
+        ':': 'true'
     } as const;
     // indicator to not flush the output in Command
     private _pipe: boolean;
@@ -1101,6 +1102,7 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     // commands that require access to internal state of the interpreter
+    // or have JavaScript restricted name
     // -------------------------------------------------------------------------
     protected async builtin_export(args: string[]) {
         this._export = true;
@@ -1111,6 +1113,16 @@ export class Bash implements BashInterpreter, Process {
         }
         this._export = false;
         return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    protected builtin_true() {
+        return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    protected builtin_false() {
+        return 1;
     }
 
     // -------------------------------------------------------------------------

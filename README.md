@@ -18,6 +18,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `$IFS` variable
 - [x] `$?` variable
 - [x] `$PWD` variable
+- [x] `:` and `.` shorcuts
 - [x] subshells
 - [x] If statements
 - [x] case expressions
@@ -26,7 +27,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] variable assignments
 - [x] arrays
 - [x] pipes
-- [x] redirects (`>` and `<`)
+- [x] redirects (`>`, `>>`, and `<`)
 - [x] JavaScript programs using web workers
 - [x] Bash scripts and shebang
 - [x] variable expansions:
