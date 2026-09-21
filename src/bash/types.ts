@@ -63,6 +63,9 @@ export type BashContext = {
     stdin: Stdin;
 };
 
+export type Module = () => unknown;
+export type Modules = Record<string, Module>
+
 export type ListDir = {
     files: string[],
     dirs: string[]

@@ -55,7 +55,9 @@ import type {
     BashInterpreter,
     ListDir,
     UserData,
-    Variable
+    Variable,
+    Module,
+    Modules
 } from './types';
 
 import { fs_constants } from './constants';
@@ -82,13 +84,15 @@ import { Completion } from './types';
 export { Completion, Signal };
 
 export type {
-    Stdout,
     Stdin,
-    PromisifiedFS,
-    Environment,
+    Module,
+    Stdout,
+    Modules,
+    ListDir,
     Commands,
     BashContext,
-    ListDir
+    Environment,
+    PromisifiedFS
 };
 
 import { complete_file, complete_directory } from './completion';
@@ -138,7 +142,7 @@ export class Bash implements BashInterpreter, Process {
     // BroadcastChannel is used to access modules from inside web worker process
     private _channel: BroadcastChannel;
     // list of exposed modules for the webworker process
-    private _modules: Record<string, () => unknown>;
+    private _modules: Modules;
     private _shorcuts = {
         '.': 'source',
         ':': 'true'
@@ -174,6 +178,7 @@ export class Bash implements BashInterpreter, Process {
             stderr: () => this._context.stderr,
             stdin: () => this._context.stdin,
             path: () => path,
+            term: () => $.terminal.active(),
             '$.terminal': () => $.terminal
         };
         this.init_ipc_channel();
@@ -328,6 +333,18 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
+    // public serilize/unserlize interface for sub class
+    // -------------------------------------------------------------------------
+    protected serialize<T = Record<string, unknown>>(object: T): T | string {
+        return object;
+    }
+
+    // -------------------------------------------------------------------------
+    protected unserialize(value: unknown): unknown {
+        return value;
+    }
+
+    // -------------------------------------------------------------------------
     // boroadcast channel for communication with web worker scripts
     // it exposes modules via RPC-like mechanizm using Proxy objects
     // inside prefix scripts added by this._process() the modules
@@ -335,9 +352,50 @@ export class Bash implements BashInterpreter, Process {
     // that doesn't exist it load it from dynamic import
     // -------------------------------------------------------------------------
     private init_ipc_channel() {
+        const channel = this._channel;
+        const callbacks: {[key: number]: (any: unknown) => void} = {};
+        function postMessage(data: Record<string, unknown>) {
+            channel.postMessage(serialize(data));
+        }
+        const unserialize = (str: string) => {
+            return JSON.parse(str, (_: any, object: any) => {
+                if (object && typeof object === 'object') {
+                    if (object.type === 'function') {
+                        const [ id, len ] = object.data;
+                        return function(...args: unknown[]) {
+                            args = args.slice(0, len);
+                            return new Promise(resolve => {
+                                callbacks[id] = resolve;
+                                postMessage({
+                                    callback: id,
+                                    args
+                                });
+                            });
+                        }
+                    }
+                }
+                return this.unserialize(object);
+            });
+        };
+        const serialize = (object: Record<string, unknown>) => {
+            // we only need ot get rid of unseralable objects like DOM nodes
+            return JSON.stringify(object, (key: string, value: unknown) => {
+                const v0 = object[key];
+                if (v0) {
+                    if (v0 instanceof ($ as any).fn.init) {
+                        return null;
+                    }
+                }
+                return this.serialize(value);
+            });
+        };
         this._channel.addEventListener('message', async (message) => {
-            const { data } = message;
+            const data = unserialize(message.data);
             const id = data.id;
+            if (typeof data.callback === 'number') {
+                const id = data.callback;
+                return callbacks[id](data.result);
+            }
             if (!data.namespace) {
                 return;
             }
@@ -357,7 +415,7 @@ export class Bash implements BashInterpreter, Process {
                 }
                 if (fn) {
                     const result = await fn(...data.args);
-                    this._channel.postMessage({
+                    postMessage({
                         id,
                         result
                     });
@@ -365,7 +423,8 @@ export class Bash implements BashInterpreter, Process {
                     throw new Error(`Invalid call ${data.namespace}::${data.method}`);
                 }
             } catch (error) {
-                this._channel.postMessage({
+                console.log(error);
+                postMessage({
                     id,
                     error
                 });
