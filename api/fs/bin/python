@@ -1,0 +1,60 @@
+#!/bin/js
+
+importScripts('https://cdn.jsdelivr.net/npm/brython@3/brython.js');
+importScripts('https://cdn.jsdelivr.net/npm/brython@3/brython_stdlib.js');
+
+const parse = require('@jcubic/lily');
+
+const stdout = require('stdout');
+const stderr = require('stderr');
+const term = require('term');
+
+const io = {
+    stdout,
+    stderr
+};
+
+self.write = function(type, data) {
+    io[type].write(data);
+};
+
+self.flush = function(type) {
+    io[type].flush();
+};
+
+const python = `
+import sys
+from browser import scope
+
+class StreamRedirect:
+    def __init__(self, stream_name):
+        self.stream_name = stream_name
+    def write(self, data):
+        scope.write(self.stream_name, data)
+    def flush(self):
+        scope.flush(self.stream_name)
+
+sys.stdout = StreamRedirect("stdout")
+sys.stderr = StreamRedirect("stderr")
+`;
+
+brython({ debug: 1 });
+
+__BRYTHON__.brython_path = 'https://cdn.jsdelivr.net/npm/brython@3.9.0/';
+
+async function main(...args) {
+    await term.pause();
+    const options = await parse(args);
+    if (options.c) {
+        const code = python + options.c;
+        try {
+            const output = __BRYTHON__.python_to_js(code);
+            term.resume();
+            eval(output);
+        } catch(e) {
+            await stderr.writeln(e.message);
+            return 1;
+        }
+    }
+    return 0;
+}
