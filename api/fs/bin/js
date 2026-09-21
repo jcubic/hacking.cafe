@@ -17,12 +17,17 @@ var __EVAL = (s) => eval(`void (__EVAL = ${__EVAL}); ${s}`);
 
 async function main(...args) {
     if (args.length) {
-        const filename = await bash.resolve_path(args.shift());
-        const source = await fs.readFile(filename, 'utf8');
-        const code = await bash.exec_js(filename, source, args);
-        await stdout.flush();
-        await stderr.flush();
-        return code;
+        try {
+            const filename = await bash.resolve_path(args.shift());
+            const source = await fs.readFile(filename, 'utf8');
+            const code = await bash.exec_js(filename, source, args);
+            await stdout.flush();
+            await stderr.flush();
+            return code;
+        } catch(e) {
+            await stderr.writeln(e.message);
+            return 1;
+        }
     }
     return new Promise(async resolve => {
         await term.push(async command => {

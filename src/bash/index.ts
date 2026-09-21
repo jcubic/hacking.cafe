@@ -444,7 +444,6 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     public exec_js(filename: string, file: string, args: string[]) {
-        console.log({ filename });
         // remove the shebang becasue this public API
         file = file.replace(/^#!(.+)\n/, '');
         const pid = this.next_pid;
@@ -454,9 +453,7 @@ export class Bash implements BashInterpreter, Process {
         const blob = new Blob([code], {
             type: 'application/javascript'
         });
-        const worker = new Worker(URL.createObjectURL(blob), {
-            type: 'module'
-        });
+        const worker = new Worker(URL.createObjectURL(blob));
         Bash._procs.push(new WorkerProcess(pid, filename, worker));
         return new Promise<number>((resolve) => {
             worker.addEventListener('message', message => {
