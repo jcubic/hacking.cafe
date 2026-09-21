@@ -31,6 +31,7 @@ import {
     Bash,
     Signal,
     Stdin,
+    Modules,
     Completion,
     BashContext,
     BufferOutput,
@@ -150,6 +151,24 @@ class Input implements Stdin {
             this._term.resume();
         }
         return ret;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// jQuery/jQuery Terminal specific bits live here so the Bash interpreter
+// itself has no dependency on jQuery
+// -----------------------------------------------------------------------------
+class TerminalBash extends Bash {
+    protected serialize(value: unknown): unknown {
+        // jQuery objects (e.g. wrap DOM nodes) can't be sent over
+        // BroadcastChannel - drop them instead of throwing
+        if (value instanceof ($ as any).fn.init) {
+            return null;
+        }
+        return super.serialize(value);
+    }
+    protected unserialize(value: unknown): unknown {
+        return super.unserialize(value);
     }
 }
 
@@ -410,7 +429,12 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     const stderr = new BufferTerminalOutput(term);
     const stdin = new Input(term);
 
-    const bash = new Bash(commands, {
+    const modules: Modules = {
+        term: () => $.terminal.active(),
+        '$.terminal': () => $.terminal
+    };
+
+    const bash = new TerminalBash(commands, {
         stdout,
         stderr,
         stdin,
@@ -418,7 +442,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
         user,
         host,
         home
-    });
+    }, modules);
 
     // for debugging
     (window as any).term = term;

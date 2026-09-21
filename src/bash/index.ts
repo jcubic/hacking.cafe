@@ -154,8 +154,15 @@ export class Bash implements BashInterpreter, Process {
     private _args: string[];
     private _name: string;
     private _PID: number;
+    // modules passed by the host application (e.g. jQuery Terminal specific
+    // ones); kept around so fork() can hand them to the child instance
+    private _extra_modules: Modules;
     private static _procs: Process[] = [];
-    constructor(commands = {}, context: Omit<BashContext, 'cwd' | 'bash'>) {
+    constructor(
+        commands = {},
+        context: Omit<BashContext, 'cwd' | 'bash'>,
+        modules: Modules = {}
+    ) {
         this._commands = { ...builtins, ...commands };
         this._context = { ...context, cwd: context.home, bash: this };
         this._globals = Object.create(null);
@@ -165,6 +172,7 @@ export class Bash implements BashInterpreter, Process {
         this._args = [];
         this._name = '/bin/bash';
         this._PID = this.next_pid;
+        this._extra_modules = modules;
         Bash._procs.push(this);
         // channel name is scoped to this instance's pid so that workers
         // spawned by a fork (pipeline, command substitution, script) only
@@ -178,8 +186,7 @@ export class Bash implements BashInterpreter, Process {
             stderr: () => this._context.stderr,
             stdin: () => this._context.stdin,
             path: () => path,
-            term: () => $.terminal.active(),
-            '$.terminal': () => $.terminal
+            ...modules
         };
         this.init_ipc_channel();
     }
@@ -290,7 +297,10 @@ export class Bash implements BashInterpreter, Process {
     // }
     // -------------------------------------------------------------------------
     public fork() {
-        const bash = new Bash(this._commands, this._context);
+        // use the concrete (sub)class so overrides like serialize/unserialize
+        // and any host-provided modules survive the fork
+        const Ctor = this.constructor as typeof Bash;
+        const bash = new Ctor(this._commands, this._context, this._extra_modules);
         // we need to inherit the state of parent bash
         // we set interal env using public read only getter
         bash._globals = this.env;
@@ -335,8 +345,8 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     // public serilize/unserlize interface for sub class
     // -------------------------------------------------------------------------
-    protected serialize<T = Record<string, unknown>>(object: T): T | string {
-        return object;
+    protected serialize(value: unknown): unknown {
+        return value;
     }
 
     // -------------------------------------------------------------------------
@@ -378,14 +388,9 @@ export class Bash implements BashInterpreter, Process {
             });
         };
         const serialize = (object: Record<string, unknown>) => {
-            // we only need ot get rid of unseralable objects like DOM nodes
-            return JSON.stringify(object, (key: string, value: unknown) => {
-                const v0 = object[key];
-                if (v0) {
-                    if (v0 instanceof ($ as any).fn.init) {
-                        return null;
-                    }
-                }
+            // any unseralable objects like DOM nodes should be handled by
+            // sub class that overrides serialize() method.
+            return JSON.stringify(object, (_key: string, value: unknown) => {
                 return this.serialize(value);
             });
         };
