@@ -100,17 +100,28 @@ export interface BashInterpreter {
     set cwd(dir: string);
     get procs(): ProcessData[];
     init(): Promise<void>;
+    // create a copy of Bash you always need to call remove_process to clean up
     fork(): BashInterpreter;
+    // clean up after the process is killed
     remove_process(pid: number): void;
     kill(pid: number): Promise<void>;
     users(): Promise<UserData[]>;
+    // return array of executable scripts from filesystem
     executables(dir: string): Promise<string[]>;
+    // resolve path using $CWD and $PATH
     resolve_path(path: string): string;
+    // read and intepret bash prompt from PS1
     prompt(string: string): string;
+    // evaluate bash code
     evaluate(code: string): TypeOrPromise<number>;
     command_exists(command: any): command is keyof Commands;
-    exec(command: string, ...args: string[]): PromiseOrType<number>;
-    get_variable(name: string): Variable | undefined | never;
+    // execute a command or a file. The filename needs to be absolute path
+    exec(command: string, ...args: string[]): Promise<number>;
+    // execute JavaScript file as a web worker process
+    exec_worker(filename: string, code: string, args: string[]): Promise<number>;
+    // execute bash code from a file as a different bash process
+    exec_bash(filename: string, code: string, args: string[]): Promise<number>;
+    get_variable(name: string): Variable;
     set_variable(name: string, value: Variable): void;
     completion(command: string, type: Completion): TypeOrPromise<string[]>;
 }

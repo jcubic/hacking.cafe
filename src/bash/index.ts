@@ -443,7 +443,7 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    protected exec_worker(filename: string, file: string, args: string[]) {
+    public exec_worker(filename: string, file: string, args: string[]) {
         const pid = this.next_pid;
         const code = this.process(file, args);
         // validate the syntax before running the code in web worker
@@ -467,7 +467,7 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    private async exec_bash(filename: string, file: string, args: string[]) {
+    public async exec_bash(filename: string, file: string, args: string[]) {
         const bash = this.fork();
         try {
             Object.assign(bash._globals, this._tmp_env);

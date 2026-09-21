@@ -1,0 +1,47 @@
+#!/bin/js
+
+const stdout = require('stdout');
+const fs = require('fs');
+const bash = require('bash');
+const stderr = require('stderr');
+const term = require('term');
+
+var console = {
+    log: (...args) => {
+        stdout.writeln(args.join(' '));
+        stdout.flush();
+    }
+}
+// ref: https://stackoverflow.com/q/67322922/387194
+var __EVAL = (s) => eval(`void (__EVAL = ${__EVAL}); ${s}`);
+
+async function main(...args) {
+    if (args.length) {
+        const filename = await bash.resolve_path(args.shift());
+        const code = await fs.readFile(filename, 'utf8');
+        return await bash.exec_worker(filename, code.replace(/^#!.*/, ''), args);
+    }
+    return new Promise(async resolve => {
+        await term.push(async command => {
+            if (command.trim()) {
+                try {
+                    const result = __EVAL(command);
+                    if (result !== undefined) {
+                        await stdout.writeln(new String(result));
+                        await stdout.flush();
+                    }
+                } catch(e) {
+                    if (e?.message) {
+                        await stderr.writeln(e.message);
+                    }
+                }
+            }
+        }, {
+            name: 'js',
+            prompt: 'js> ',
+            onExit: () => resolve(0)
+        });
+        await term.resume();
+    });
+    return 0;
+}
