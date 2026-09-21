@@ -112,13 +112,21 @@ class WorkerProcess implements Process {
     private _pid: number;
     private _worker: Worker;
     private _name: string;
-    constructor(pid: number, name: string, worker: Worker) {
+    private _channel: BroadcastChannel;
+    constructor(pid: number, name: string, worker: Worker, channel: BroadcastChannel) {
         this._pid = pid;
         this._worker = worker;
         this._name = name;
+        this._channel = channel;
     }
     public terminate() {
         this._worker.terminate();
+        this._channel.close();
+    }
+    // called when the worker already exited on its own - only the IPC
+    // channel needs closing, the worker itself is already gone
+    public close() {
+        this._channel.close();
     }
     get name() {
         return this._name;
@@ -139,8 +147,6 @@ export class Bash implements BashInterpreter, Process {
     private _tmp_env: Environment;
     // context is object that is passed to builtin commands as this
     private _context: BashContext;
-    // BroadcastChannel is used to access modules from inside web worker process
-    private _channel: BroadcastChannel;
     // list of exposed modules for the webworker process
     private _modules: Modules;
     private _shorcuts = {
@@ -174,11 +180,6 @@ export class Bash implements BashInterpreter, Process {
         this._PID = this.next_pid;
         this._extra_modules = modules;
         Bash._procs.push(this);
-        // channel name is scoped to this instance's pid so that workers
-        // spawned by a fork (pipeline, command substitution, script) only
-        // talk to the instance that spawned them, not to every other live
-        // Bash instance listening on a shared channel name
-        this._channel = new BroadcastChannel(`__ipc__:${this._PID}`);
         this._modules = {
             fs: () => this.fs,
             bash: () => this,
@@ -188,7 +189,6 @@ export class Bash implements BashInterpreter, Process {
             path: () => path,
             ...modules
         };
-        this.init_ipc_channel();
     }
 
     // -------------------------------------------------------------------------
@@ -335,10 +335,10 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     // we need to add aditional code to the worker scripts for them to work
     // -------------------------------------------------------------------------
-    private process(code: string, args: string[] = []) {
+    private process(code: string, args: string[], pid: number) {
         const _args = JSON.stringify(args)
         return proceess_wrapper.replace('{{ARGS}}', _args)
-            .replace('{{PID}}', JSON.stringify(this._PID))
+            .replace('{{PID}}', JSON.stringify(pid))
             .replace('{{CODE}}', code);
     }
 
@@ -360,9 +360,13 @@ export class Bash implements BashInterpreter, Process {
     // inside prefix scripts added by this._process() the modules
     // are accessed via require() helper. When user try to import a module
     // that doesn't exist it load it from dynamic import
+    //
+    // each spawned worker gets its own dedicated channel (see exec_js) so
+    // that nested/concurrent workers never share a channel name - if they
+    // did, their independent RPC id counters could collide and responses
+    // would be delivered to the wrong pending call
     // -------------------------------------------------------------------------
-    private init_ipc_channel() {
-        const channel = this._channel;
+    private listen(channel: BroadcastChannel) {
         const callbacks: {[key: number]: (any: unknown) => void} = {};
         function postMessage(data: Record<string, unknown>) {
             channel.postMessage(serialize(data));
@@ -394,7 +398,7 @@ export class Bash implements BashInterpreter, Process {
                 return this.serialize(value);
             });
         };
-        this._channel.addEventListener('message', async (message) => {
+        channel.addEventListener('message', async (message) => {
             const data = unserialize(message.data);
             const id = data.id;
             if (typeof data.callback === 'number') {
@@ -428,7 +432,6 @@ export class Bash implements BashInterpreter, Process {
                     throw new Error(`Invalid call ${data.namespace}::${data.method}`);
                 }
             } catch (error) {
-                console.log(error);
                 postMessage({
                     id,
                     error
@@ -447,14 +450,20 @@ export class Bash implements BashInterpreter, Process {
         // remove the shebang becasue this public API
         file = file.replace(/^#!(.+)\n/, '');
         const pid = this.next_pid;
-        const code = this.process(file, args);
+        // every worker (even one spawned by another worker calling back into
+        // bash.exec_js, e.g. /bin/js launching the script it interprets)
+        // gets its own channel keyed by its own pid, so independent RPC id
+        // counters from concurrent/nested workers never collide
+        const channel = new BroadcastChannel(`__ipc__:${pid}`);
+        this.listen(channel);
+        const code = this.process(file, args, pid);
         // validate the syntax before running the code in web worker
         new Function(file);
         const blob = new Blob([code], {
             type: 'application/javascript'
         });
         const worker = new Worker(URL.createObjectURL(blob));
-        Bash._procs.push(new WorkerProcess(pid, filename, worker));
+        Bash._procs.push(new WorkerProcess(pid, filename, worker, channel));
         return new Promise<number>((resolve) => {
             worker.addEventListener('message', message => {
                 if ('exit' in message.data) {
@@ -487,11 +496,11 @@ export class Bash implements BashInterpreter, Process {
                 return true;
             }
             // pids get recycled (next_pid reuses the gap left by a removed
-            // process), so a fork's channel must be closed here - otherwise
-            // a later instance created with the same pid would share its
-            // channel name with this now-abandoned listener
-            if (proc instanceof Bash) {
-                proc._channel.close();
+            // process), so a worker's channel must be closed here -
+            // otherwise a later worker created with the same pid would
+            // share its channel name with this now-abandoned listener
+            if (proc instanceof WorkerProcess) {
+                proc.close();
             }
             return false;
         });
@@ -512,7 +521,8 @@ export class Bash implements BashInterpreter, Process {
                 const msg = `bash: ${filename}: ${interpreter}: bad interpreter: No such file or directory`;
                 throw new Error(msg);
             }
-            return this.exec_js(interpreter,  file, [filename, ...args]);
+            file = await this.fs.readFile(interpreter, 'utf8');
+            return this.exec_js(interpreter, file, [filename, ...args]);
         }
         return this.exec_bash(filename, file, args);
     }

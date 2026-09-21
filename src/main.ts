@@ -465,7 +465,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     for (const pathname of paths.files) {
         try {
             const stat = await fs.stat(pathname);
-            if (stat.isDirectory()) {
+            if (stat.isDirectory() || DEBUG) {
                 await bash.exec('rm', '-r', pathname);
                 await make_file(pathname);
             }

@@ -4,10 +4,11 @@ importScripts('https://cdn.jsdelivr.net/npm/brython@3/brython.js');
 importScripts('https://cdn.jsdelivr.net/npm/brython@3/brython_stdlib.js');
 
 const parse = require('@jcubic/lily');
-
 const stdout = require('stdout');
 const stderr = require('stderr');
 const term = require('term');
+const bash = require('bash');
+const fs = require('fs');
 
 const io = {
     stdout,
@@ -42,19 +43,38 @@ brython({ debug: 1 });
 
 __BRYTHON__.brython_path = 'https://cdn.jsdelivr.net/npm/brython@3.9.0/';
 
+async function run(code) {
+    try {
+        const output = __BRYTHON__.python_to_js(code);
+        term.resume();
+        eval(output);
+        return 0;
+    } catch(e) {
+        console.log(e);
+        await stderr.writeln(e.message);
+        return 1;
+    }
+}
+
 async function main(...args) {
+    if (!args.length) {
+        return 0;
+    }
     await term.pause();
     const options = await parse(args);
     if (options.c) {
-        const code = python + options.c;
+        return await run(python + options.c);
+    }
+    if (options._.length) {
         try {
-            const output = __BRYTHON__.python_to_js(code);
-            term.resume();
-            eval(output);
+            const filename = await bash.resolve_path(options._[0]);
+            const code = await fs.readFile(filename, 'utf8');
+            return await run(python + code.replace(/^#!.*/, ''));
         } catch(e) {
-            await stderr.writeln(e.message);
+            stderr.writeln(e.message);
             return 1;
         }
     }
+    term.resume();
     return 0;
 }

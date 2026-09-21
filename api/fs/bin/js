@@ -10,6 +10,10 @@ var console = {
     log: (...args) => {
         stdout.writeln(args.join(' '));
         stdout.flush();
+    },
+    errror: (...args) => {
+        sterr.writeln(args.join(' '));
+        sterr.flush();
     }
 }
 // ref: https://stackoverflow.com/q/67322922/387194
