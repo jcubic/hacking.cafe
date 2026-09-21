@@ -443,7 +443,10 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    public exec_worker(filename: string, file: string, args: string[]) {
+    public exec_js(filename: string, file: string, args: string[]) {
+        console.log({ filename });
+        // remove the shebang becasue this public API
+        file = file.replace(/^#!(.+)\n/, '');
         const pid = this.next_pid;
         const code = this.process(file, args);
         // validate the syntax before running the code in web worker
@@ -507,10 +510,12 @@ export class Bash implements BashInterpreter, Process {
         const shebang = file.match(re);
         if (shebang) {
             const interpreter = shebang[1];
-            file = file.replace(re, '');
-            if (interpreter === '/bin/js') {
-                return this.exec_worker(filename, file, args);
+            file = file.replace(/^#!(.+)\n/, '');
+            if (!this.is_executable(interpreter)) {
+                const msg = `bash: ${filename}: ${interpreter}: bad interpreter: No such file or directory`;
+                throw new Error(msg);
             }
+            return this.exec_js(interpreter,  file, [filename, ...args]);
         }
         return this.exec_bash(filename, file, args);
     }
@@ -668,6 +673,34 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
+    private async is_executable(filename: string) {
+        const stat = await this.fs.stat(filename);
+        if (!stat.isFile()) {
+            throw new Error(`bash: ${filename}: not found`);
+        }
+        const executable = fs_constants.S_IXUSR |
+            fs_constants.S_IXGRP |
+            fs_constants.S_IXOTH;
+        return (stat.mode & executable) !== 0;
+    }
+
+    // -------------------------------------------------------------------------
+    private async find_executable(command: string): Promise<string> {
+        const filename = await this.find_name(command);
+        if (!filename) {
+            throw new Error(`bash: ${command}: Command not found`);
+        }
+        try {
+            if (!this.is_executable(filename)) {
+                throw new Error(`bash: ${command}: Permission denied`);
+            }
+        } catch(e) {
+            throw new Error(`bash: ${command}: not found`);
+        }
+        return filename;
+    }
+
+    // -------------------------------------------------------------------------
     public async exec(command: string, ...args: string[]): Promise<number> {
         if (this.command_exists(command)) {
             const fn = this._commands[command];
@@ -677,20 +710,7 @@ export class Bash implements BashInterpreter, Process {
             }
             return 0;
         } else {
-            const filename = await this.find_name(command as any);
-            if (!filename) {
-                throw new Error(`bash: ${command}: Command not found`);
-            }
-            const stat = await this.fs.stat(filename);
-            if (!stat.isFile()) {
-                throw new Error(`bash: ${command}: Command not found`);
-            }
-            const executable = fs_constants.S_IXUSR |
-                fs_constants.S_IXGRP |
-                fs_constants.S_IXOTH;
-            if ((stat.mode & executable) === 0) {
-                throw new Error(`bash: ${command}: Permission denied`);
-            }
+            const filename = await this.find_executable(command);
             return await this.exec_script(filename, ...args);
         }
     }

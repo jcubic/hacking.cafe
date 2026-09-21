@@ -18,8 +18,11 @@ var __EVAL = (s) => eval(`void (__EVAL = ${__EVAL}); ${s}`);
 async function main(...args) {
     if (args.length) {
         const filename = await bash.resolve_path(args.shift());
-        const code = await fs.readFile(filename, 'utf8');
-        return await bash.exec_worker(filename, code.replace(/^#!.*/, ''), args);
+        const source = await fs.readFile(filename, 'utf8');
+        const code = await bash.exec_js(filename, source, args);
+        await stdout.flush();
+        await stderr.flush();
+        return code;
     }
     return new Promise(async resolve => {
         await term.push(async command => {

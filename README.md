@@ -26,7 +26,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] pipes
 - [x] redirects (`>`, `>>`, and `<`)
 - [x] JavaScript programs using web workers
-- [x] Bash scripts and shebang
+- [x] Bash scripts
+- [x] custom intepreters with shebang
 - [x] variable expansions:
   - [x] `${DATABASE_URL:="localhost"}`
   - [x] `USER_ID=${1:?"Error, arg missing!"}`
@@ -102,6 +103,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ] `/bin/who`
   - [ ] `/bin/uname`
   - [ ] `/bin/hostname`
+  - [x] `/bin/js`
+  - [ ] `/bin/python`
   - [x] `/bin/sleep`
   - [x] `vi` ([jsvi](https://github.com/jcubic/jsvi))
   - [ ] `/bin/nano` ([micro](https://github.com/jcubic/jquery.micro) - add to npm)

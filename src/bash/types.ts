@@ -118,7 +118,7 @@ export interface BashInterpreter {
     // execute a command or a file. The filename needs to be absolute path
     exec(command: string, ...args: string[]): Promise<number>;
     // execute JavaScript file as a web worker process
-    exec_worker(filename: string, code: string, args: string[]): Promise<number>;
+    exec_js(filename: string, code: string, args: string[]): Promise<number>;
     // execute bash code from a file as a different bash process
     exec_bash(filename: string, code: string, args: string[]): Promise<number>;
     get_variable(name: string): Variable;
