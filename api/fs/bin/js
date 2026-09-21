@@ -22,8 +22,11 @@ var __EVAL = (s) => eval(`void (__EVAL = ${__EVAL}); ${s}`);
 async function main(...args) {
     if (args.length) {
         try {
+            await term.pause();
             const filename = await bash.resolve_path(args.shift());
             const source = await fs.readFile(filename, 'utf8');
+            // validate JavaScript syntax
+            new Function(source.replace(/^#!.*/, ''));
             const code = await bash.exec_js(filename, source, args);
             await stdout.flush();
             await stderr.flush();
@@ -31,6 +34,8 @@ async function main(...args) {
         } catch(e) {
             await stderr.writeln(e.message);
             return 1;
+        } finally {
+            await term.resume();
         }
     }
     return new Promise(async resolve => {

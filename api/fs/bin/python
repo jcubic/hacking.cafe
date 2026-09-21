@@ -23,58 +23,133 @@ self.flush = function(type) {
     io[type].flush();
 };
 
-const python = `
+self.set_prompt = function(prompt) {
+    term.set_prompt(prompt);
+};
+
+const python = String.raw`
 import sys
-from browser import scope
+import re
+import traceback
+import javascript
+from browser import scope, self, console
 
 class StreamRedirect:
     def __init__(self, stream_name):
         self.stream_name = stream_name
     def write(self, data):
         scope.write(self.stream_name, data)
+        self.flush()
     def flush(self):
         scope.flush(self.stream_name)
 
 sys.stdout = StreamRedirect("stdout")
 sys.stderr = StreamRedirect("stderr")
+
+code = ""
+
+env = {}
+
+def version():
+    v = sys.implementation.version
+    sys.stdout.write(f"Brython {v[0]}.{v[1]}.{v[2]}\n")
+
+def error(err):
+    lines = traceback.format_exception(err);
+    return "".join(lines)
+
+def evaluate(code):
+    global env
+    try:
+        ret = eval(code, env)
+        if ret != None:
+            sys.stdout.write(repr(ret) + "\n")
+    except:
+        try:
+            exec(code, env)
+        except Exception as e:
+            lines = traceback.format_exception(e)
+            err = "".join(lines)
+            err = re.sub(r".*(interpreter|evaluate)\n", "", err)
+            err = re.sub(r'".*"', '"&lt;stdin&gt;"', err)
+            sys.stderr.write(err)
+
+def interpreter(command):
+    global code
+    try:
+        if command.endswith(":"):
+            scope.set_prompt("... ")
+            code = code + command + "\n"
+        elif code != "":
+            if command == "":
+                scope.set_prompt(">>> ")
+                evaluate(code)
+                code = ""
+            else:
+                code = code + command + "\n"
+        else:
+            evaluate(command)
+    except SyntaxError as msg:
+        if str(msg) == 'invalid syntax : triple string end not found' or str(msg).startswith('Unbalanced bracket'):
+            scope.set_prompt("... ")
+            code = code + command
+    return javascript.UNDEFINED
+
+self.interpreter = interpreter
+self.version = version
+self.error  = error
+
 `;
 
 brython({ debug: 1 });
 
 __BRYTHON__.brython_path = 'https://cdn.jsdelivr.net/npm/brython@3.9.0/';
 
-async function run(code) {
+async function run(code, filename = '__internal__') {
     try {
         const output = __BRYTHON__.python_to_js(code);
-        term.resume();
         eval(output);
         return 0;
-    } catch(e) {
-        console.log(e);
-        await stderr.writeln(e.message);
+    } catch(err) {
+        await stderr.write(self.error(err).replace(/blob:[^"]+/, filename));
         return 1;
     }
 }
 
+
 async function main(...args) {
+    run(python);
     if (!args.length) {
-        return 0;
+        return new Promise(async resolve => {
+            await term.pause();
+            self.version();
+            term.push(command => {
+                return self.interpreter(command);
+            }, {
+                name: 'python',
+                prompt: '>>> ',
+                onExit: () => resolve(0)
+            });
+            await term.resume();
+        });
     }
     await term.pause();
     const options = await parse(args);
-    if (options.c) {
-        return await run(python + options.c);
-    }
-    if (options._.length) {
-        try {
+    try {
+        if (options.c) {
+            return await run(options.c, '&lt;string&gt;');
+        }
+        if (options._.length) {
             const filename = await bash.resolve_path(options._[0]);
             const code = await fs.readFile(filename, 'utf8');
-            return await run(python + code.replace(/^#!.*/, ''));
-        } catch(e) {
-            stderr.writeln(e.message);
-            return 1;
+            return await run(code.replace(/^#!.*/, ''), filename);
         }
+        stderr.writeln('usage: python [-c "code"] | [filename]');
+        return 0;
+    } catch(e) {
+        stderr.writeln(e.message);
+        return 1;
+    } finally {
+        term.resume();
     }
-    term.resume();
-    return 0;
 }
