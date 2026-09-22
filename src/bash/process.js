@@ -52,8 +52,12 @@ const __modules__ = (() => {
     });
 
     // root is either { namespace: string } for a require()'d module or
-    // { object: id } for a handle previously returned by the main thread
-    function call(root, path, args) {
+    // { object: id } for a handle previously returned by the main thread.
+    // ops is the accumulated sequence of property-accesses/calls collected
+    // by make_chain, e.g. $('.terminal').terminal() becomes
+    // [{type:'call',args:['.terminal']}, {type:'get',key:'terminal'}, {type:'call',args:[]}]
+    // and is walked on the main thread in a single round trip
+    function call(root, ops) {
         return new Promise((resolve, reject) => {
             const id = ++rprc_id;
             channel.addEventListener('message', function handler(message) {
@@ -70,33 +74,48 @@ const __modules__ = (() => {
             const payload = serialize({
                 id,
                 ...root,
-                path,
-                args
+                ops
             });
             channel.postMessage(payload);
         });
     }
 
-    // proxy that accumulates a chain of property accesses (e.g.
-    // $.terminal.active) and only talks to the main thread once the chain
-    // is invoked as a function - the accumulated path plus the call
-    // arguments are sent in one message instead of one round trip per
-    // property access
-    function make_chain(root, path = []) {
+    // proxy that accumulates a chain of property accesses/calls (e.g.
+    // $('.terminal').terminal().echo('hi')) without talking to the main
+    // thread at all - the whole chain is only resolved, in one round trip,
+    // once something actually awaits it (see the 'then' trap below)
+    function make_chain(root, ops = []) {
         return new Proxy(function() {}, {
             apply(_target, _this_arg, args) {
-                return call(root, path, args);
+                return make_chain(root, [...ops, { type: 'call', args }]);
             },
             get(_target, key) {
-                // 'then' must stay undefined or `await`-ing a chain (e.g.
-                // `await term.pause()` where pause() resolves to a chain
-                // proxy) mistakes it for a thenable, calls .then() on it as
-                // an RPC round trip that has no real receiver, and the
-                // await never settles
-                if (typeof key !== 'string' || key === 'then') {
+                // 'then' is never forwarded as a regular chain step - it is
+                // either the thenable hook (see below) or undefined, never
+                // another chain proxy. Otherwise a bare, never-awaited
+                // reference (ops still empty, e.g. `const t = require('term')`)
+                // would report typeof t.then === 'function' too (since
+                // accessing .then would itself return a callable proxy),
+                // making it look thenable to any code/engine machinery that
+                // checks for one.
+                if (key === 'then') {
+                    // becoming a real thenable is what triggers execution:
+                    // `await chain` sends the accumulated ops in one message
+                    // and resolves with the result. Only do this when there
+                    // is something to run - a freshly received object handle
+                    // (ops still empty) must stay non-thenable, because it
+                    // resolves to *another* such handle and native promise
+                    // resolution would keep "adopting" it as a thenable
+                    // forever otherwise
+                    if (!ops.length) {
+                        return undefined;
+                    }
+                    return (resolve, reject) => call(root, ops).then(resolve, reject);
+                }
+                if (typeof key !== 'string') {
                     return undefined;
                 }
-                return make_chain(root, [...path, key]);
+                return make_chain(root, [...ops, { type: 'get', key }]);
             }
         });
     }

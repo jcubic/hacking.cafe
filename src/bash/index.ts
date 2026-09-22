@@ -440,32 +440,36 @@ export class Bash implements BashInterpreter, Process {
                     root = await this._import(data.namespace);
                     this._modules[data.namespace] = () => root;
                 }
-                // path is the chain of property accesses collected on the
-                // worker side (e.g. $.terminal.active -> ['terminal','active'])
-                // before the whole thing got called; walk all but the last
-                // segment to find the object the final method lives on
-                const path: string[] = data.path ?? [];
+                // ops is the chain of property-accesses/calls accumulated on
+                // the worker side without any network round trip, e.g.
+                // $('.terminal').terminal() becomes [call ['.terminal'],
+                // get 'terminal', call []] - walk it here in one go so a
+                // whole chain only costs a single message, not one per step.
+                // `object` tracks the receiver a call should be bound to
+                // (whatever the value was accessed off of), `value` is the
+                // running result of the chain so far.
+                const ops: Array<
+                    { type: 'get', key: string } | { type: 'call', args: unknown[] }
+                > = data.ops ?? [];
                 let object = root;
-                for (let i = 0; i < path.length - 1; i++) {
-                    object = object[path[i]];
+                let value = root;
+                for (const op of ops) {
+                    if (op.type === 'get') {
+                        object = value;
+                        value = value?.[op.key];
+                    } else {
+                        if (typeof value !== 'function') {
+                            const target = has_object ? `#${data.object}` : data.namespace;
+                            throw new Error(`Invalid call ${target}: not a function`);
+                        }
+                        value = await value.apply(object, op.args);
+                        object = undefined;
+                    }
                 }
-                const method = path.length ? path[path.length - 1] : undefined;
-                let fn: any;
-                if (!method) {
-                    fn = object;
-                } else if (typeof object[method] === 'function') {
-                    fn = object[method].bind(object);
-                }
-                if (fn) {
-                    const result = await fn(...data.args);
-                    postMessage({
-                        id,
-                        result
-                    });
-                } else {
-                    const target = has_object ? `#${data.object}` : data.namespace;
-                    throw new Error(`Invalid call ${target}::${path.join('.')}`);
-                }
+                postMessage({
+                    id,
+                    result: value
+                });
             } catch (error) {
                 postMessage({
                     id,
