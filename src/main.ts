@@ -161,10 +161,12 @@ class Input implements Stdin {
 // -----------------------------------------------------------------------------
 class TerminalBash extends Bash {
     protected serialize(value: unknown): unknown {
-        // jQuery objects (e.g. wrap DOM nodes) can't be sent over
-        // BroadcastChannel - drop them instead of throwing
+        // jQuery objects (e.g. wrap DOM nodes, including terminal instances
+        // returned by $.terminal.active()) can't be sent over
+        // BroadcastChannel as-is - expose them as a remote handle instead so
+        // worker scripts can still call methods on them (see to_remote())
         if (value instanceof ($ as any).fn.init) {
-            return null;
+            return this.to_remote(value);
         }
         return super.serialize(value);
     }
@@ -430,7 +432,10 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
 
     const modules: Modules = {
         term: () => $.terminal.active(),
-        '$.terminal': () => $.terminal
+        // exposes the full jQuery/jQuery Terminal static API, e.g.
+        // require('$').terminal.active() - '$.terminal' as a separate
+        // module is redundant now that chained property access works
+        '$': () => $
     };
 
     const bash = new TerminalBash(commands, {

@@ -118,11 +118,11 @@ async function run(code, filename = '__internal__') {
 
 
 async function main(...args) {
+    await term.pause();
     run(`import sys; sys.argv=${JSON.stringify(args)}`)
     run(python);
     if (!args.length) {
         return new Promise(async resolve => {
-            await term.pause();
             self.version();
             term.push(command => {
                 return self.interpreter(command);

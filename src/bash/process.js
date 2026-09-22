@@ -25,7 +25,17 @@ const __modules__ = (() => {
     }
 
     function unserialize(string) {
-        return JSON.parse(string);
+        // an { type: 'object', data: [id] } marker is a handle to a value
+        // that lives on the main thread (e.g. a jQuery object) - turn it
+        // back into a chain proxy rooted at that handle instead of the
+        // literal marker object
+        return JSON.parse(string, (_key, value) => {
+            if (value && typeof value === 'object' && value.type === 'object') {
+                const [ id ] = value.data;
+                return make_chain({ object: id });
+            }
+            return value;
+        });
     }
 
     // callback mechanism needs persistent message channel
@@ -41,7 +51,9 @@ const __modules__ = (() => {
         }
     });
 
-    function call(namespace, args, method = null) {
+    // root is either { namespace: string } for a require()'d module or
+    // { object: id } for a handle previously returned by the main thread
+    function call(root, path, args) {
         return new Promise((resolve, reject) => {
             const id = ++rprc_id;
             channel.addEventListener('message', function handler(message) {
@@ -57,26 +69,41 @@ const __modules__ = (() => {
             });
             const payload = serialize({
                 id,
-                namespace,
-                method,
+                ...root,
+                path,
                 args
             });
             channel.postMessage(payload);
         });
     }
 
-    return new Proxy({}, {
-        get(target, namespace) {
-            return new Proxy(() => {}, {
-                apply(target, thisArg, args) {
-                    return call(namespace, args);
-                },
-                get(target, method) {
-                    return (...args) => {
-                        return call(namespace, args, method);
-                    };
+    // proxy that accumulates a chain of property accesses (e.g.
+    // $.terminal.active) and only talks to the main thread once the chain
+    // is invoked as a function - the accumulated path plus the call
+    // arguments are sent in one message instead of one round trip per
+    // property access
+    function make_chain(root, path = []) {
+        return new Proxy(function() {}, {
+            apply(_target, _this_arg, args) {
+                return call(root, path, args);
+            },
+            get(_target, key) {
+                // 'then' must stay undefined or `await`-ing a chain (e.g.
+                // `await term.pause()` where pause() resolves to a chain
+                // proxy) mistakes it for a thenable, calls .then() on it as
+                // an RPC round trip that has no real receiver, and the
+                // await never settles
+                if (typeof key !== 'string' || key === 'then') {
+                    return undefined;
                 }
-            });
+                return make_chain(root, [...path, key]);
+            }
+        });
+    }
+
+    return new Proxy({}, {
+        get(_target, namespace) {
+            return make_chain({ namespace });
         }
     });
 })();

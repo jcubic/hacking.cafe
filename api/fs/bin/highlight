@@ -6,7 +6,7 @@ const stdin = require('stdin');
 const stderr = require('stderr');
 const bash = require('bash');
 const parse = require('@jcubic/lily');
-const terminal = require('$.terminal');
+const $ = require('$');
 
 async function main(...args) {
     const options = await parse(args);
@@ -21,6 +21,6 @@ async function main(...args) {
         const filename = await bash.resolve_path(options._[0]);
         content = await fs.readFile(filename, 'utf8');
     }
-    await stdout.write(await terminal.prism(options.lang, content));
+    await stdout.write(await $.terminal.prism(options.lang, content));
     return 0;
 }

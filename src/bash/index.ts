@@ -337,9 +337,12 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     private process(code: string, args: string[], pid: number) {
         const _args = JSON.stringify(args)
-        return proceess_wrapper.replace('{{ARGS}}', _args)
-            .replace('{{PID}}', JSON.stringify(pid))
-            .replace('{{CODE}}', code);
+        // replacement must be a function - a string replacement would have
+        // "$"-sequences in `code` (e.g. require('$') for the jQuery module)
+        // interpreted as special patterns like $&/$'/$`, corrupting the output
+        return proceess_wrapper.replace('{{ARGS}}', () => _args)
+            .replace('{{PID}}', () => JSON.stringify(pid))
+            .replace('{{CODE}}', () => code);
     }
 
     // -------------------------------------------------------------------------
@@ -352,6 +355,22 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     protected unserialize(value: unknown): unknown {
         return value;
+    }
+
+    // -------------------------------------------------------------------------
+    // registry for values that can't cross the BroadcastChannel as-is (class
+    // instances with methods, DOM-backed objects, etc). A sub class's
+    // serialize() can call this to turn such a value into a handle
+    // ({ type: 'object', data: [id] }) the worker can invoke methods on
+    // instead of the value itself - see listen() below for the other end.
+    // handles live for the lifetime of this Bash instance, there is no GC.
+    // -------------------------------------------------------------------------
+    private _objects = new Map<number, unknown>();
+    private _object_id = 0;
+    protected to_remote(value: unknown) {
+        const id = ++this._object_id;
+        this._objects.set(id, value);
+        return { type: 'object', data: [id] };
     }
 
     // -------------------------------------------------------------------------
@@ -405,22 +424,37 @@ export class Bash implements BashInterpreter, Process {
                 const id = data.callback;
                 return callbacks[id](data.result);
             }
-            if (!data.namespace) {
+            const has_object = typeof data.object === 'number';
+            if (!data.namespace && !has_object) {
                 return;
             }
             try {
-                let object: any;
-                if (this._modules[data.namespace]) {
-                    object = this._modules[data.namespace]();
+                // root is either a module (require('name')) or a handle
+                // previously returned by to_remote() (require('name').a.b())
+                let root: any;
+                if (has_object) {
+                    root = this._objects.get(data.object);
+                } else if (this._modules[data.namespace]) {
+                    root = this._modules[data.namespace]();
                 } else {
-                    object = await this._import(data.namespace);
-                    this._modules[data.namespace] = () => object;
+                    root = await this._import(data.namespace);
+                    this._modules[data.namespace] = () => root;
                 }
+                // path is the chain of property accesses collected on the
+                // worker side (e.g. $.terminal.active -> ['terminal','active'])
+                // before the whole thing got called; walk all but the last
+                // segment to find the object the final method lives on
+                const path: string[] = data.path ?? [];
+                let object = root;
+                for (let i = 0; i < path.length - 1; i++) {
+                    object = object[path[i]];
+                }
+                const method = path.length ? path[path.length - 1] : undefined;
                 let fn: any;
-                if (!data.method) {
+                if (!method) {
                     fn = object;
-                } else if (typeof object[data.method] === 'function') {
-                    fn = object[data.method].bind(object);
+                } else if (typeof object[method] === 'function') {
+                    fn = object[method].bind(object);
                 }
                 if (fn) {
                     const result = await fn(...data.args);
@@ -429,7 +463,8 @@ export class Bash implements BashInterpreter, Process {
                         result
                     });
                 } else {
-                    throw new Error(`Invalid call ${data.namespace}::${data.method}`);
+                    const target = has_object ? `#${data.object}` : data.namespace;
+                    throw new Error(`Invalid call ${target}::${path.join('.')}`);
                 }
             } catch (error) {
                 postMessage({

@@ -4,7 +4,7 @@ const stdout = require('stdout');
 const stdin = require('stdin');
 const cowsay = require('cowsay');
 const parse = require('@jcubic/lily');
-const terminal = require('$.terminal');
+const $ = require('$');
 
 async function main(...args) {
     const options = await parse(args);
@@ -20,7 +20,7 @@ async function main(...args) {
         T : 'U '
     });
     result = result.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    result = await terminal.escape_brackets(result);
+    result = await $.terminal.escape_brackets(result);
 
     await stdout.writeln(result);
     return 0;
