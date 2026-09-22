@@ -39,7 +39,6 @@ class StreamRedirect:
         self.stream_name = stream_name
     def write(self, data):
         scope.write(self.stream_name, data)
-        self.flush()
     def flush(self):
         scope.flush(self.stream_name)
 
@@ -90,7 +89,8 @@ def interpreter(command):
         else:
             evaluate(command)
     except SyntaxError as msg:
-        if str(msg) == 'invalid syntax : triple string end not found' or str(msg).startswith('Unbalanced bracket'):
+        if str(msg) == 'invalid syntax : triple string end not found' or \
+            str(msg).startswith('Unbalanced bracket'):
             scope.set_prompt("... ")
             code = code + command
     return javascript.UNDEFINED
@@ -118,6 +118,7 @@ async function run(code, filename = '__internal__') {
 
 
 async function main(...args) {
+    run(`import sys; sys.argv=${JSON.stringify(args)}`)
     run(python);
     if (!args.length) {
         return new Promise(async resolve => {
