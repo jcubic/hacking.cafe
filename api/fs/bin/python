@@ -151,6 +151,8 @@ async function main(...args) {
         stderr.writeln(e.message);
         return 1;
     } finally {
+        await io.stdout.flush();
+        await io.stderr.flush();
         term.resume();
     }
 }
