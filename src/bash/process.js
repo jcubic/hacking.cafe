@@ -85,20 +85,20 @@ function require(module) {
   return __modules__[module];
 }
 
-try {
+{
 
 {{CODE}}
 
-    const args = {{ARGS}};
-    (async () => {
-        const code = await main(...args);
-        self.postMessage({ exit: code });
-        self.close();
-    })();
-} catch (error) {
-    (async () => {
-        await __modules__.stderr.writeln(error.message);
-        self.postMessage({ exit: 100 });
-        self.close();
-    })();
+const args = {{ARGS}};
+(async () => {
+    const code = await main(...args);
+    self.postMessage({ exit: code });
+    self.close();
+})().catch(async error => {
+    console.log(error);
+    await __modules__.stderr.writeln(error.message);
+    self.postMessage({ exit: 100 });
+    self.close();
+});
+
 }
