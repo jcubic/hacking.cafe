@@ -21,6 +21,7 @@ import rpc from '@jcubic/json-rpc';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import path from 'path-browserify';
 import { z } from 'zod';
+import 'jsvi/vi.css';
 
 import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
@@ -328,8 +329,6 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                 term.blur();
                 let write_promise: Promise<void>;
                 const editor = vi(textarea, {
-                    color: 'var(--color)',
-                    backgroundColor: 'var(--background)',
                     padding: 10,
                     onSave: async() => {
                         const content = editor.freeze();
