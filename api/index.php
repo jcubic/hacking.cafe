@@ -197,11 +197,18 @@ class Service extends RequestCache {
                 return $name !== '.gitkeep' && !preg_match('/~$|^#.*#$/', $name);
             }));
         }
+        $mtimes = [];
+        foreach ($lists['files'] as $path) {
+            $key = preg_replace("%\\./fs%", "", $path);
+            // milliseconds, to match JavaScript's Date.now() / fs stat mtimeMs
+            $mtimes[$key] = filemtime($path) * 1000;
+        }
         foreach ($lists as $name => $list) {
             $lists[$name] = array_map(function($path) {
                 return preg_replace("%\\./fs%", "", $path);
             }, $list);
         }
+        $lists['mtimes'] = $mtimes;
         return $lists;
     }
 

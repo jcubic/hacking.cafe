@@ -64,6 +64,12 @@ const LocationSchema = z.object({
 });
 
 // -----------------------------------------------------------------------------
+// shape of the object returned by the service.init_list() JSON-RPC method
+export type InitList = ListDir & {
+    mtimes: Record<string, number>
+};
+
+// -----------------------------------------------------------------------------
 class BufferTerminalOutput extends BufferOutput {
     protected _term: JQueryTerminal;
     constructor(term: JQueryTerminal) {
@@ -454,7 +460,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     (term as any).bash = bash;
 
     // intialize the file system after update or deleting of files
-    const paths = await service.init_list() as ListDir;
+    const paths = await service.init_list() as InitList;
     for (const pathname of paths.dirs) {
         try {
             const stat = await fs.stat(pathname);
@@ -469,8 +475,10 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     for (const pathname of paths.files) {
         try {
             const stat = await fs.stat(pathname);
-            await bash.exec('rm', '-r', pathname);
-            await make_file(pathname);
+            if (paths.mtimes[pathname] > stat.mtimeMs) {
+                await bash.exec('rm', '-r', pathname);
+                await make_file(pathname);
+            }
         } catch(e) {
             await make_file(pathname);
         }
