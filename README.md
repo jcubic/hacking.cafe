@@ -3,7 +3,9 @@
 # Hacking Cafe
 
 [![CI](https://github.com/jcubic/hacking.cafe/actions/workflows/ci.yaml/badge.svg)](https://github.com/jcubic/hacking.cafe/actions/workflows/ci.yaml)
+[![hakcing.cafe GitHub repo](https://img.shields.io/badge/github-hacking.cafe-orange?logo=github)](https://github.com/jcubic/hacking.cafe)
 [![Coverage Status](https://coveralls.io/repos/github/jcubic/hacking.cafe/badge.svg?branch=master)](https://coveralls.io/github/jcubic/hacking.cafe?branch=master)
+[![LICENSE AGPLv3](https://img.shields.io/badge/license-AGPLv3-blue.svg)](https://github.com/jcubic/hacking.cafe/blob/master/LICENSE)
 
 </div>
 
