@@ -7,13 +7,13 @@ const stderr = require('stderr');
 const term = require('term');
 
 var console = {
-    log: (...args) => {
-        stdout.writeln(args.join(' '));
-        stdout.flush();
+    log: async (...args) => {
+        await stdout.writeln(args.join(' '));
+        await stdout.flush();
     },
-    errror: (...args) => {
-        sterr.writeln(args.join(' '));
-        sterr.flush();
+    error: async (...args) => {
+        await stderr.writeln(args.join(' '));
+        await stderr.flush();
     }
 }
 // ref: https://stackoverflow.com/q/67322922/387194
