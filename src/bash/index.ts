@@ -24,10 +24,6 @@ import path from 'path-browserify';
 import parse_options from '@jcubic/lily';
 import { Host } from '@jcubic/mitty';
 
-// turns a value that can't cross the channel into a handle the worker can call
-// methods on - see Bash::serialize()
-type Remote = (value: unknown) => unknown;
-
 import type {
     If,
     Node,
