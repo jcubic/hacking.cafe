@@ -28,6 +28,7 @@
     "@isomorphic-git/lightning-fs": "^4.8.0",
     "@jcubic/json-rpc": "^1.0.0",
     "@jcubic/lily": "^0.5.1",
+    "@jcubic/mitty": "^0.2.0",
     "jquery": "^3.7.1",
     "jquery.terminal": "github:jcubic/jquery.terminal#devel",
     "jsvi": "^0.3.0",

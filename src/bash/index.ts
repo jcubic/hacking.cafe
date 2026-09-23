@@ -22,6 +22,11 @@
 import { parse } from 'unbash';
 import path from 'path-browserify';
 import parse_options from '@jcubic/lily';
+import { Host } from '@jcubic/mitty';
+
+// turns a value that can't cross the channel into a handle the worker can call
+// methods on - see Bash::serialize()
+type Remote = (value: unknown) => unknown;
 
 import type {
     If,
@@ -113,19 +118,29 @@ class WorkerProcess implements Process {
     private _worker: Worker;
     private _name: string;
     private _channel: BroadcastChannel;
-    constructor(pid: number, name: string, worker: Worker, channel: BroadcastChannel) {
+    private _host: Host;
+    constructor(
+        pid: number,
+        name: string,
+        worker: Worker,
+        channel: BroadcastChannel,
+        host: Host
+    ) {
         this._pid = pid;
         this._worker = worker;
         this._name = name;
         this._channel = channel;
+        this._host = host;
     }
     public terminate() {
         this._worker.terminate();
-        this._channel.close();
+        this.close();
     }
-    // called when the worker already exited on its own - only the IPC
-    // channel needs closing, the worker itself is already gone
+    // called when the worker already exited on its own - the worker itself is
+    // already gone, but the IPC channel and every handle the host still holds
+    // on its behalf have to be dropped
     public close() {
+        this._host.close();
         this._channel.close();
     }
     get name() {
@@ -337,18 +352,28 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     private process(code: string, args: string[], pid: number) {
         const _args = JSON.stringify(args)
+        // the worker runs from a blob: URL, whose path is opaque - nothing
+        // relative resolves against it, so mitty has to be named absolutely
+        const mitty = new URL('/mitty.js', location.href).href;
         // replacement must be a function - a string replacement would have
         // "$"-sequences in `code` (e.g. require('$') for the jQuery module)
         // interpreted as special patterns like $&/$'/$`, corrupting the output
         return proceess_wrapper.replace('{{ARGS}}', () => _args)
             .replace('{{PID}}', () => JSON.stringify(pid))
+            .replace('{{MITTY}}', () => mitty)
             .replace('{{CODE}}', () => code);
     }
 
     // -------------------------------------------------------------------------
     // public serilize/unserlize interface for sub class
+    //
+    // serialize() is handed a remote() function for the worker it is talking
+    // to: values that can't cross the BroadcastChannel as-is (class instances
+    // with methods, DOM-backed objects) go through it and reach the worker as
+    // a handle it can call methods on instead. Handles belong to that one
+    // worker and are dropped when its process exits.
     // -------------------------------------------------------------------------
-    protected serialize(value: unknown): unknown {
+    protected serialize(value: unknown, _remote: Remote): unknown {
         return value;
     }
 
@@ -358,125 +383,43 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    // registry for values that can't cross the BroadcastChannel as-is (class
-    // instances with methods, DOM-backed objects, etc). A sub class's
-    // serialize() can call this to turn such a value into a handle
-    // ({ type: 'object', data: [id] }) the worker can invoke methods on
-    // instead of the value itself - see listen() below for the other end.
-    // handles live for the lifetime of this Bash instance, there is no GC.
-    // -------------------------------------------------------------------------
-    private _objects = new Map<number, unknown>();
-    private _object_id = 0;
-    protected to_remote(value: unknown) {
-        const id = ++this._object_id;
-        this._objects.set(id, value);
-        return { type: 'object', data: [id] };
-    }
-
-    // -------------------------------------------------------------------------
-    // boroadcast channel for communication with web worker scripts
-    // it exposes modules via RPC-like mechanizm using Proxy objects
-    // inside prefix scripts added by this._process() the modules
-    // are accessed via require() helper. When user try to import a module
-    // that doesn't exist it load it from dynamic import
+    // mitty Host for one worker: it listens on the worker's channel and
+    // resolves the chains of property accesses and calls that require()
+    // records on the other side.
     //
     // each spawned worker gets its own dedicated channel (see exec_js) so
     // that nested/concurrent workers never share a channel name - if they
     // did, their independent RPC id counters could collide and responses
     // would be delivered to the wrong pending call
     // -------------------------------------------------------------------------
-    private listen(channel: BroadcastChannel) {
-        const callbacks: {[key: number]: (any: unknown) => void} = {};
-        function postMessage(data: Record<string, unknown>) {
-            channel.postMessage(serialize(data));
-        }
-        const unserialize = (str: string) => {
-            return JSON.parse(str, (_: any, object: any) => {
-                if (object && typeof object === 'object') {
-                    if (object.type === 'function') {
-                        const [ id, len ] = object.data;
-                        return function(...args: unknown[]) {
-                            args = args.slice(0, len);
-                            return new Promise(resolve => {
-                                callbacks[id] = resolve;
-                                postMessage({
-                                    callback: id,
-                                    args
-                                });
-                            });
-                        }
-                    }
-                }
-                return this.unserialize(object);
-            });
-        };
-        const serialize = (object: Record<string, unknown>) => {
-            // any unseralable objects like DOM nodes should be handled by
-            // sub class that overrides serialize() method.
-            return JSON.stringify(object, (_key: string, value: unknown) => {
-                return this.serialize(value);
-            });
-        };
-        channel.addEventListener('message', async (message) => {
-            const data = unserialize(message.data);
-            const id = data.id;
-            if (typeof data.callback === 'number') {
-                const id = data.callback;
-                return callbacks[id](data.result);
-            }
-            const has_object = typeof data.object === 'number';
-            if (!data.namespace && !has_object) {
-                return;
-            }
-            try {
-                // root is either a module (require('name')) or a handle
-                // previously returned by to_remote() (require('name').a.b())
-                let root: any;
-                if (has_object) {
-                    root = this._objects.get(data.object);
-                } else if (this._modules[data.namespace]) {
-                    root = this._modules[data.namespace]();
-                } else {
-                    root = await this._import(data.namespace);
-                    this._modules[data.namespace] = () => root;
-                }
-                // ops is the chain of property-accesses/calls accumulated on
-                // the worker side without any network round trip, e.g.
-                // $('.terminal').terminal() becomes [call ['.terminal'],
-                // get 'terminal', call []] - walk it here in one go so a
-                // whole chain only costs a single message, not one per step.
-                // `object` tracks the receiver a call should be bound to
-                // (whatever the value was accessed off of), `value` is the
-                // running result of the chain so far.
-                const ops: Array<
-                    { type: 'get', key: string } | { type: 'call', args: unknown[] }
-                > = data.ops ?? [];
-                let object = root;
-                let value = root;
-                for (const op of ops) {
-                    if (op.type === 'get') {
-                        object = value;
-                        value = value?.[op.key];
-                    } else {
-                        if (typeof value !== 'function') {
-                            const target = has_object ? `#${data.object}` : data.namespace;
-                            throw new Error(`Invalid call ${target}: not a function`);
-                        }
-                        value = await value.apply(object, op.args);
-                        object = undefined;
-                    }
-                }
-                postMessage({
-                    id,
-                    result: value
-                });
-            } catch (error) {
-                postMessage({
-                    id,
-                    error
-                });
-            }
+    private create_host(channel: BroadcastChannel) {
+        const serialize = this.serialize.bind(this);
+        const unserialize = this.unserialize.bind(this);
+        const resolve = this.resolve_module.bind(this);
+        return new Host({
+            channel,
+            resolve,
+            // `this` is the Host, so handles are registered against the worker
+            // that asked for them
+            serialize(value: unknown) {
+                return serialize(value, remote => this.remote(remote));
+            },
+            unserialize
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // a module is either one this shell exposes or, failing that, whatever a
+    // dynamic import of the name yields - cached either way, so a script that
+    // requires the same module twice only pays for it once
+    // -------------------------------------------------------------------------
+    private async resolve_module(name: string) {
+        if (this._modules[name]) {
+            return this._modules[name]();
+        }
+        const module = await this._import(name);
+        this._modules[name] = () => module;
+        return module;
     }
 
     // -------------------------------------------------------------------------
@@ -494,7 +437,7 @@ export class Bash implements BashInterpreter, Process {
         // gets its own channel keyed by its own pid, so independent RPC id
         // counters from concurrent/nested workers never collide
         const channel = new BroadcastChannel(`__ipc__:${pid}`);
-        this.listen(channel);
+        const host = this.create_host(channel);
         const code = this.process(file, args, pid);
         // validate the syntax before running the code in web worker
         new Function(file);
@@ -502,7 +445,7 @@ export class Bash implements BashInterpreter, Process {
             type: 'application/javascript'
         });
         const worker = new Worker(URL.createObjectURL(blob));
-        Bash._procs.push(new WorkerProcess(pid, filename, worker, channel));
+        Bash._procs.push(new WorkerProcess(pid, filename, worker, channel, host));
         return new Promise<number>((resolve) => {
             worker.addEventListener('message', message => {
                 if ('exit' in message.data) {

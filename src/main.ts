@@ -160,15 +160,15 @@ class Input implements Stdin {
 // itself has no dependency on jQuery
 // -----------------------------------------------------------------------------
 class TerminalBash extends Bash {
-    protected serialize(value: unknown): unknown {
+    protected serialize(value: unknown, remote: (value: unknown) => unknown): unknown {
         // jQuery objects (e.g. wrap DOM nodes, including terminal instances
         // returned by $.terminal.active()) can't be sent over
         // BroadcastChannel as-is - expose them as a remote handle instead so
-        // worker scripts can still call methods on them (see to_remote())
+        // worker scripts can still call methods on them
         if (value instanceof ($ as any).fn.init) {
-            return this.to_remote(value);
+            return remote(value);
         }
-        return super.serialize(value);
+        return super.serialize(value, remote);
     }
     protected unserialize(value: unknown): unknown {
         return super.unserialize(value);

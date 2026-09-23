@@ -53,6 +53,14 @@ export default defineConfig({
                     src: 'public/favicon/favicon.ico',
                     dest: '.',
                     rename: { stripBase: true }
+                },
+                {
+                    // worker scripts pull mitty in with importScripts('/mitty.js')
+                    // - they run from a Blob URL, so the library cannot be
+                    // bundled into them (see src/bash/process.js)
+                    src: 'node_modules/@jcubic/mitty/dist/index.global.js',
+                    dest: '.',
+                    rename: { stripBase: true, name: 'mitty.js' }
                 }
             ]
         })
