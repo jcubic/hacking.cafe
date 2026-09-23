@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Signal } from '../src/bash/utils';
+import { Exit } from '../src/bash/utils';
 import { create_bash } from './helpers/bash';
 
 describe('evaluate', () => {
@@ -243,10 +243,39 @@ describe('redirects', () => {
         cleanup();
     });
 
+    it('appends to a file that does not exist yet', async () => {
+        const { fs, run, cleanup } = await create_bash();
+        await run('echo one >> out.txt');
+        await run('echo two >> out.txt');
+        expect(await fs.readFile('/home/guest/out.txt', 'utf8')).toBe('one\ntwo\n');
+        cleanup();
+    });
+
     it('leaves stdout alone for the next command', async () => {
         const { output, run, cleanup } = await create_bash();
         await run('echo hidden > out.txt');
         expect(await output('echo visible')).toBe('visible\n');
+        cleanup();
+    });
+
+    it('keeps the shell usable after the command fails', async () => {
+        const { output, run, cleanup } = await create_bash();
+        expect(await run('cat /does/not/exist > out.txt')).toBe(1);
+        expect(await output('echo visible')).toBe('visible\n');
+        cleanup();
+    });
+
+    it('still creates the file when the command fails', async () => {
+        const { fs, run, cleanup } = await create_bash();
+        await run('cat /does/not/exist > out.txt');
+        expect(await fs.readFile('/home/guest/out.txt', 'utf8')).toBe('');
+        cleanup();
+    });
+
+    it('lets the error through on stderr when only stdout is redirected', async () => {
+        const { run, stderr, cleanup } = await create_bash();
+        await run('cat /does/not/exist > out.txt');
+        expect(stderr.text).toMatch(/ENOENT/);
         cleanup();
     });
 
@@ -375,17 +404,79 @@ describe('prefix assignments', () => {
 });
 
 describe('exit', () => {
-    it('raises a Signal carrying the code instead of returning it', async () => {
+    // exit unwinds the shell it runs in; whoever started that shell - a script
+    // runner, or the terminal - is the one that turns it into a status
+    it('raises an Exit carrying the code', async () => {
         const { run, cleanup } = await create_bash();
-        await expect(run('exit 3')).rejects.toBeInstanceOf(Signal);
-        await expect(run('exit 3')).rejects.toHaveProperty('code', 128 + 3);
+        await expect(run('exit 3')).rejects.toBeInstanceOf(Exit);
+        await expect(run('exit 3')).rejects.toHaveProperty('code', 3);
         cleanup();
     });
 
     it('stops the rest of the script', async () => {
         const { bash, stdout, cleanup } = await create_bash();
-        await expect(bash.evaluate('echo before\nexit 0\necho after')).rejects.toBeInstanceOf(Signal);
+        await expect(bash.evaluate('echo before\nexit 0\necho after'))
+            .rejects.toBeInstanceOf(Exit);
         expect(stdout.text).toBe('before\n');
+        cleanup();
+    });
+
+    it('is the status a script reports', async () => {
+        const { run, cleanup } = await create_bash({
+            fixture: {
+                '/bin/three': { content: 'exit 3\n', mode: 0o755 },
+                '/bin/clean': { content: 'echo done\nexit 0\n', mode: 0o755 }
+            }
+        });
+        await run('export PATH=/bin');
+        expect(await run('three')).toBe(3);
+        expect(await run('clean')).toBe(0);
+        cleanup();
+    });
+
+    it('takes the status of the last command with no argument', async () => {
+        const { run, cleanup } = await create_bash({
+            fixture: { '/bin/failed': { content: 'false\nexit\n', mode: 0o755 } }
+        });
+        await run('export PATH=/bin');
+        expect(await run('failed')).toBe(1);
+        cleanup();
+    });
+});
+
+describe('subshell', () => {
+    it('does not leak variables to the parent shell', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('NAME=outer');
+        await run('(NAME=inner)');
+        expect(bash.get_variable('NAME')).toBe('outer');
+        cleanup();
+    });
+
+    it('does not move the parent shell', async () => {
+        const { bash, run, cleanup } = await create_bash({ fixture: { '/tmp/': '' } });
+        await run('(cd /tmp)');
+        expect(bash.cwd).toBe('/home/guest');
+        cleanup();
+    });
+
+    it('runs its commands', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('(echo one; echo two)')).toBe('one\ntwo\n');
+        cleanup();
+    });
+
+    it('sees the environment of the parent shell', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('export NAME=bob\n(echo $NAME)')).toBe('bob\n');
+        cleanup();
+    });
+
+    it('leaves the process table as it found it', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        const before = bash.procs.length;
+        await run('(echo x)');
+        expect(bash.procs).toHaveLength(before);
         cleanup();
     });
 });

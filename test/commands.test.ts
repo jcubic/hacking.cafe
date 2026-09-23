@@ -7,21 +7,6 @@ function plain(text: string) {
     return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-// retries an assertion until it holds, for the commands that return before
-// the work they started has finished
-async function eventually(assertion: () => Promise<void>, timeout = 1000) {
-    const deadline = Date.now() + timeout;
-    for (;;) {
-        try {
-            return await assertion();
-        } catch (error) {
-            if (Date.now() > deadline) {
-                throw error;
-            }
-            await new Promise(resolve => setTimeout(resolve, 5));
-        }
-    }
-}
 
 describe('echo', () => {
     it('prints its arguments separated by a space', async () => {
@@ -57,6 +42,32 @@ describe('echo', () => {
     it('understands octal and hex escapes with -e', async () => {
         const { output, cleanup } = await create_bash();
         expect(await output(String.raw`echo -e '\x41\0101'`)).toBe('AA\n');
+        cleanup();
+    });
+
+    it('prints an argument that starts with a dash', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('echo "- item"')).toBe('- item\n');
+        expect(await output('echo -- item')).toBe('-- item\n');
+        expect(await output('echo "-x"')).toBe('-x\n');
+        cleanup();
+    });
+
+    it('only takes options from the front of the arguments', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('echo hello -n')).toBe('hello -n\n');
+        cleanup();
+    });
+
+    it('takes several flags at once', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output(String.raw`echo -ne 'a\tb'`)).toBe('a\tb');
+        cleanup();
+    });
+
+    it('turns escapes back off with -E', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output(String.raw`echo -e -E 'a\tb'`)).toBe('a\\tb\n');
         cleanup();
     });
 });
@@ -182,6 +193,24 @@ describe('grep', () => {
         expect(await output('grep two')).toBe('two\n');
         cleanup();
     });
+
+    it('prints the lines that do not match with -v', async () => {
+        const { output, cleanup } = await create_bash({ fixture });
+        expect(await output('grep -v an list.txt')).toBe('Apple\ncherry\n');
+        cleanup();
+    });
+
+    it('does not count the end of the last line as an empty one', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('printf "a\\nb\\n" | grep -v a')).toBe('b\n');
+        cleanup();
+    });
+
+    it('prints nothing when nothing matches', async () => {
+        const { output, cleanup } = await create_bash({ fixture });
+        expect(await output('grep zebra list.txt')).toBe('');
+        cleanup();
+    });
 });
 
 describe('mkdir', () => {
@@ -300,14 +329,21 @@ describe('rm', () => {
     });
 
     it('removes a tree with -r', async () => {
-        // rm returns before the delete finishes - see known-bugs
         const { fs, run, cleanup } = await create_bash({
             fixture: { '/home/guest/dir/sub/f': 'x' }
         });
         await run('rm -r dir');
-        await eventually(async () => {
-            await expect(fs.stat('/home/guest/dir')).rejects.toThrow(/ENOENT/);
+        await expect(fs.stat('/home/guest/dir')).rejects.toThrow(/ENOENT/);
+        cleanup();
+    });
+
+    it('has finished deleting when it returns', async () => {
+        const { fs, run, cleanup } = await create_bash({
+            fixture: { '/home/guest/a': 'x', '/home/guest/dir/deep/f': 'y' }
         });
+        await run('rm a');
+        await run('rm -r dir');
+        expect(await fs.readdir('/home/guest')).toEqual(['.bashrc']);
         cleanup();
     });
 });
@@ -438,8 +474,6 @@ describe('test', () => {
         expect(await status('test b ">" a')).toBe(0);
     });
 
-    // -ne, -le and -ge are missing here on purpose: they are swallowed by the
-    // -e file test before they are ever compared, see known-bugs
     it('compares numbers', async () => {
         expect(await status('test 2 -eq 2')).toBe(0);
         expect(await status('test 3 -eq 2')).toBe(1);
@@ -447,6 +481,17 @@ describe('test', () => {
         expect(await status('test 2 -lt 1')).toBe(1);
         expect(await status('test 3 -gt 2')).toBe(0);
         expect(await status('test 2 -gt 3')).toBe(1);
+    });
+
+    // these three end in an `e`, which a general option parser reads as the
+    // -e file test with the right hand side as its argument
+    it('compares numbers with the operators that end in e', async () => {
+        expect(await status('test 1 -ne 2')).toBe(0);
+        expect(await status('test 2 -ne 2')).toBe(1);
+        expect(await status('test 2 -le 2')).toBe(0);
+        expect(await status('test 3 -le 2')).toBe(1);
+        expect(await status('test 2 -ge 2')).toBe(0);
+        expect(await status('test 1 -ge 2')).toBe(1);
     });
 
     it('tests for an empty string', async () => {
@@ -572,18 +617,20 @@ describe('pushd, popd and dirs', () => {
 });
 
 describe('source', () => {
-    // source does not await the code it runs, and when it is reached through
-    // the parser the assignments it makes are lost - see known-bugs. Called
-    // directly, it does what it says
-    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-
     it('runs a script in the current shell', async () => {
-        const { bash, cleanup } = await create_bash({
+        const { bash, run, cleanup } = await create_bash({
             fixture: { '/home/guest/vars.sh': 'NAME=bob\n' }
         });
-        await bash.exec('source', 'vars.sh');
-        await tick();
+        await run('source vars.sh');
         expect(bash.get_variable('NAME')).toBe('bob');
+        cleanup();
+    });
+
+    it('has run the script when it returns', async () => {
+        const { output, cleanup } = await create_bash({
+            fixture: { '/home/guest/vars.sh': 'NAME=bob\n' }
+        });
+        expect(await output('source vars.sh\necho $NAME')).toBe('bob\n');
         cleanup();
     });
 
@@ -596,10 +643,11 @@ describe('source', () => {
     });
 
     it('is available as .', async () => {
-        const { output, cleanup } = await create_bash({
-            fixture: { '/home/guest/hello.sh': 'echo sourced\n' }
+        const { bash, run, cleanup } = await create_bash({
+            fixture: { '/home/guest/vars.sh': 'NAME=bob\n' }
         });
-        expect(await output('. hello.sh')).toBe('sourced\n');
+        await run('. vars.sh');
+        expect(bash.get_variable('NAME')).toBe('bob');
         cleanup();
     });
 });

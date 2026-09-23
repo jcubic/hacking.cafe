@@ -35,10 +35,9 @@ type Listener = (event: { data: unknown }) => void;
 const blobs = new Map<string, Blob>();
 let counter = 0;
 
-// An open BroadcastChannel keeps Node's event loop alive, and exec_js leaks one
-// whenever it refuses a program (see known-bugs), so the test run would hang on
-// to it. Every channel opened while the fake worker is installed is recorded
-// and closed on the way out.
+// An open BroadcastChannel keeps Node's event loop alive, so every channel
+// opened while the fake worker is installed is recorded and closed on the way
+// out - a test that leaves one behind would hold up the whole run.
 const channels: BroadcastChannel[] = [];
 
 class TrackedChannel extends BroadcastChannel {

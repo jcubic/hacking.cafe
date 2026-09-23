@@ -14,6 +14,82 @@ async function expand(code: string, setup = '') {
     }
 }
 
+// Bash tells an unset variable from an empty one, and the colon in each of
+// these operators asks for the empty one to count too. This shell has no such
+// distinction, so both spellings behave the same way
+describe('${VAR:-default}', () => {
+    it('keeps the value of a variable that has one', async () => {
+        expect(await expand('${NAME:-anon}', 'NAME=bob')).toBe('bob');
+        expect(await expand('${NAME-anon}', 'NAME=bob')).toBe('bob');
+    });
+
+    it('falls back to the default when there is none', async () => {
+        expect(await expand('${NAME:-anon}')).toBe('anon');
+        expect(await expand('${NAME-anon}')).toBe('anon');
+    });
+
+    it('expands the default itself', async () => {
+        expect(await expand('${NAME:-$OTHER}', 'OTHER=sue')).toBe('sue');
+    });
+
+    it('does not assign the default', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('echo ${NAME:-anon}');
+        expect(bash.get_variable('NAME')).toBe('');
+        cleanup();
+    });
+});
+
+describe('${VAR:=default}', () => {
+    it('keeps the value of a variable that has one', async () => {
+        expect(await expand('${DATABASE_URL:="remote"}', 'DATABASE_URL=local')).toBe('local');
+        expect(await expand('${DATABASE_URL="remote"}', 'DATABASE_URL=local')).toBe('local');
+    });
+
+    it('assigns the default when there is none', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('X=${DATABASE_URL:="localhost"}\necho $DATABASE_URL'))
+            .toBe('localhost\n');
+        cleanup();
+    });
+
+    it('leaves a variable that has a value alone', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('NAME=bob');
+        await run('echo ${NAME:=anon}');
+        expect(bash.get_variable('NAME')).toBe('bob');
+        cleanup();
+    });
+});
+
+describe('${VAR+alternative}', () => {
+    it('yields the alternative for a variable that has a value', async () => {
+        expect(await expand('${NAME+yes}', 'NAME=bob')).toBe('yes');
+    });
+
+    it('yields nothing when there is no value', async () => {
+        expect(await expand('${NAME+yes}')).toBe('');
+    });
+});
+
+describe('${VAR?message}', () => {
+    it('yields the value when there is one', async () => {
+        expect(await expand('${NAME?missing}', 'NAME=bob')).toBe('bob');
+    });
+
+    it('raises when there is none', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('echo ${NAME?missing}')).rejects.toThrow('missing');
+        cleanup();
+    });
+
+    it('raises a message of its own with no operand', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('echo ${NAME?}')).rejects.toThrow(/NAME: parameter null or not set/);
+        cleanup();
+    });
+});
+
 describe('${VAR:+alternative}', () => {
     it('yields the alternative when the variable is set', async () => {
         expect(await expand('${NAME:+yes}', 'NAME=bob')).toBe('yes');
@@ -112,6 +188,11 @@ describe('${VAR^} and ${VAR^^}', () => {
 
     it('upper cases everything', async () => {
         expect(await expand('${N^^}', 'N=bob')).toBe('BOB');
+    });
+
+    it('expands a variable with no value to nothing', async () => {
+        expect(await expand('${N^}')).toBe('');
+        expect(await expand('${N^^}')).toBe('');
     });
 });
 

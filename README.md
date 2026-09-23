@@ -137,10 +137,6 @@ and talking to the shell's mitty Host over the same channel the worker prelude u
 `test/helpers/`. Anything that needs a real browser (the worker prelude itself, jQuery
 Terminal) is left to end-to-end tests.
 
-`test/known-bugs.test.ts` holds tests written the way the shell is *supposed* to behave for
-bugs that are not fixed yet. They are marked `it.fails`, so the suite stays green and vitest
-reports a test there as failing once the bug behind it is fixed.
-
 ## Limitations
 
 * Bash expands aliases before processing keyboards, which allows changing syntax. By design

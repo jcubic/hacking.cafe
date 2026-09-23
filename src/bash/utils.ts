@@ -348,3 +348,19 @@ export class Signal {
         return 128 + this._code;
     }
 }
+
+// -----------------------------------------------------------------------------
+// raised by the `exit` builtin to unwind out of the running script. It is not a
+// Signal: a process that exits with 3 reports 3, while one killed by signal 3
+// reports 128+3, and the two must not be confused
+// -----------------------------------------------------------------------------
+export class Exit extends Error {
+    private _code: number;
+    constructor(code: number) {
+        super(`exit ${code}`);
+        this._code = code;
+    }
+    get code() {
+        return this._code;
+    }
+}

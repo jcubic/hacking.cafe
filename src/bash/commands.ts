@@ -40,10 +40,22 @@ import {
 
 // -----------------------------------------------------------------------------
 export function echo(this: BashContext, ...args: string[]) {
-    const options = parse_options(args, {
-        boolean: ['e', 'n']
-    } as any);
-    let output = options._.join(' ');
+    // echo takes its options only from the front of the argument list, and
+    // only the three it knows - a general option parser would eat any
+    // argument that happens to start with a dash, wherever it appears
+    console.log({ args })
+    const options = { e: false, n: false };
+    while (args.length && args[0].match(/^-[neE]+$/)) {
+        const flags = (args.shift() as string).substring(1);
+        for (const flag of flags) {
+            if (flag === 'n') {
+                options.n = true;
+            } else {
+                options.e = flag === 'e';
+            }
+        }
+    }
+    let output = args.join(' ');
     if (options.e) {
         const re = /\\([\\ntbe]|0[0-9]{1,3}|x[0-9a-zA-Z]{1,2})/g
         output = output.replace(re, (_, str) => {
@@ -91,6 +103,11 @@ export async function grep(this: BashContext, ...args: string[]) {
     }
     const re = new RegExp(pattern, options.i ? 'i' : '');
     const lines = content.split('\n');
+    // the newline at the end of the last line is a terminator, not the start
+    // of an empty one - without this -v prints a line that was never there
+    if (lines.at(-1) === '') {
+        lines.pop();
+    }
     for (const line of lines) {
         const match = line.match(re);
         if ((options.v && !match) || (!options.v && match)) {
@@ -108,12 +125,12 @@ export async function rm(this: BashContext, ...args: string[]) {
             const stat = await this.fs.stat(pathname);
             if (stat.isDirectory()) {
                 if (options.r) {
-                    rmdir(this.fs, pathname);
+                    await rmdir(this.fs, pathname);
                 } else {
                     this.stderr.writeln(`${file} is a directory`);
                 }
             } else {
-                this.fs.unlink(pathname);
+                await this.fs.unlink(pathname);
             }
         }
     } catch(e) {
@@ -276,7 +293,7 @@ export async function source(this: BashContext, ...args: string[]) {
     if (options._.length === 1) {
         const filename = this.bash.resolve_path(options._[0]);
         const file = await this.fs.readFile(filename, 'utf8');
-        this.bash.evaluate(file);
+        await this.bash.evaluate(file);
     }
 }
 
@@ -352,7 +369,6 @@ export async function read(this: BashContext, ...args: string[]) {
 
 // -----------------------------------------------------------------------------
 export async function test(this: BashContext, ...args: string[]) {
-    const options = parse_options(args);
     const { bash, fs } = this;
     async function is(filename: string, string: keyof Stats | null = null, follow = true) {
         try {
@@ -366,18 +382,9 @@ export async function test(this: BashContext, ...args: string[]) {
             return 1;
         }
     }
-    if (typeof options.d === 'string') {
-        return is(options.d, 'isDirectory');
-    }
-    if (typeof options.e === 'string') {
-        return is(options.e);
-    }
-    if (typeof options.f === 'string') {
-        return is(options.f, 'isFile');
-    }
-    if (typeof options.L === 'string' || typeof options.h === 'string') {
-        return is((options.L ?? options.h) as string, 'isSymbolicLink', false);
-    }
+    // a three word comparison is answered before the arguments are parsed as
+    // options: in a run of short flags the last one takes the value, so `-le 2`
+    // would come out as `-l -e 2` and be mistaken for the -e file test
     if (args.length === 3) {
         const [left, op, right] = args;
         switch (op) {
@@ -407,8 +414,21 @@ export async function test(this: BashContext, ...args: string[]) {
                 case '-ne':
                     return a !== b ? 0 : 1;
             }
+            throw new Error(`test: unsuported operator ${op}`);
         }
-        throw new Error(`test: unsuported operator ${op}`);
+    }
+    const options = parse_options(args);
+    if (typeof options.d === 'string') {
+        return is(options.d, 'isDirectory');
+    }
+    if (typeof options.e === 'string') {
+        return is(options.e);
+    }
+    if (typeof options.f === 'string') {
+        return is(options.f, 'isFile');
+    }
+    if (typeof options.L === 'string' || typeof options.h === 'string') {
+        return is((options.L ?? options.h) as string, 'isSymbolicLink', false);
     }
     if (args.length === 2) {
         const [op, string] = args;

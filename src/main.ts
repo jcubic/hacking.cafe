@@ -30,6 +30,7 @@ import type { ListDir } from './bash/types';
 import { system_details } from './utils';
 import {
     Bash,
+    Exit,
     Signal,
     Stdin,
     Modules,
@@ -513,6 +514,11 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             try {
                 await bash.evaluate(command);
             } catch(e) {
+                // `exit` and CTRL+C unwind the shell but are not errors to
+                // report - the session simply carries on with a new prompt
+                if (e instanceof Exit || e instanceof Signal) {
+                    return;
+                }
                 this.echo((e as Error).message);
                 if (DEBUG) {
                     setTimeout(() => { throw e }, 0);

@@ -287,14 +287,30 @@ describe('serialize', () => {
     });
 });
 
-// kept last on purpose: the channel and the mitty Host are created before the
-// syntax check runs, and nothing closes them when it throws. Since pids are
-// recycled, the abandoned host then shares a channel with the next program and
-// answers its requests alongside the real one - see known-bugs
 describe('a program that does not parse', () => {
     it('is refused before a worker is started', async () => {
         const { bash, cleanup } = await create_bash();
         expect(() => bash.exec_js('/bin/broken', 'function (', [])).toThrow(SyntaxError);
+        cleanup();
+    });
+
+    // the channel has to be opened after the syntax check, not before: pids
+    // are reused, so a channel left behind here would answer on a name the
+    // next program is handed, alongside the host that program really has
+    it('leaves no channel behind', async () => {
+        const { bash, cleanup } = await create_bash();
+        expect(() => bash.exec_js('/bin/broken', 'function (', [])).toThrow(SyntaxError);
+        const { worker, exit } = await start(bash, program);
+        const spy = new BroadcastChannel(`__ipc__:${worker.pid}`);
+        const messages: unknown[] = [];
+        spy.onmessage = (event: MessageEvent) => messages.push(event.data);
+        expect(await worker.require('bash').cwd).toBe('/home/guest');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        spy.close();
+        // one request, one answer
+        expect(messages).toHaveLength(2);
+        worker.exit();
+        await exit;
         cleanup();
     });
 });

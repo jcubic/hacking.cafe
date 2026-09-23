@@ -243,6 +243,39 @@ describe('scripts', () => {
         cleanup();
     });
 
+    it('refuses a file without an execute bit', async () => {
+        const { run, stderr, cleanup } = await create_bash({
+            fixture: { '/bin/plain': { content: 'echo ran anyway\n', mode: 0o644 } }
+        });
+        await run('export PATH=/bin');
+        expect(await run('plain')).toBe(1);
+        expect(stderr.text).toMatch(/bash: plain: Permission denied/);
+        cleanup();
+    });
+
+    it('reports a shebang naming an interpreter that is not there', async () => {
+        const { run, stderr, cleanup } = await create_bash({
+            fixture: { '/bin/weird': { content: '#!/bin/nothing\ncode\n', mode: 0o755 } }
+        });
+        await run('export PATH=/bin');
+        expect(await run('weird')).toBe(1);
+        expect(stderr.text).toMatch(/\/bin\/nothing: bad interpreter/);
+        cleanup();
+    });
+
+    it('reports a shebang naming an interpreter that cannot be run', async () => {
+        const { run, stderr, cleanup } = await create_bash({
+            fixture: {
+                '/bin/notexec': { content: 'async function main() {}', mode: 0o644 },
+                '/bin/weird': { content: '#!/bin/notexec\ncode\n', mode: 0o755 }
+            }
+        });
+        await run('export PATH=/bin');
+        expect(await run('weird')).toBe(1);
+        expect(stderr.text).toMatch(/\/bin\/notexec: bad interpreter/);
+        cleanup();
+    });
+
     it('searches every entry of PATH', async () => {
         const { run, output, cleanup } = await create_bash({
             fixture: {

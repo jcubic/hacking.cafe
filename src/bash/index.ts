@@ -39,6 +39,7 @@ import type {
     Command,
     Redirect,
     Pipeline,
+    Subshell,
     WordPart,
     Statement,
     ParsedScript,
@@ -76,6 +77,7 @@ import * as builtins from './commands';
 import {
     date,
     char,
+    Exit,
     Signal,
     glob_to_regex,
     import_module,
@@ -86,7 +88,7 @@ export { color } from './utils';
 
 import { Completion } from './types';
 
-export { Completion, Signal };
+export { Completion, Signal, Exit };
 
 export type {
     Stdin,
@@ -431,6 +433,10 @@ export class Bash implements BashInterpreter, Process {
     public exec_js(filename: string, file: string, args: string[]) {
         // remove the shebang becasue this public API
         file = file.replace(/^#!(.+)\n/, '');
+        // validate the syntax before anything is allocated for the process:
+        // a channel opened here and abandoned would keep answering on a name
+        // the next process gets handed, since pids are reused
+        new Function(file);
         const pid = this.next_pid;
         // every worker (even one spawned by another worker calling back into
         // bash.exec_js, e.g. /bin/js launching the script it interprets)
@@ -439,8 +445,6 @@ export class Bash implements BashInterpreter, Process {
         const channel = new BroadcastChannel(`__ipc__:${pid}`);
         const host = this.create_host(channel);
         const code = this.process(file, args, pid);
-        // validate the syntax before running the code in web worker
-        new Function(file);
         const blob = new Blob([code], {
             type: 'application/javascript'
         });
@@ -466,6 +470,13 @@ export class Bash implements BashInterpreter, Process {
             bash._args = args;
             const code = await bash.evaluate(file);
             return code;
+        } catch(e) {
+            // `exit` unwinds the whole script, and the status it names is what
+            // the script reports to whoever ran it
+            if (e instanceof Exit) {
+                return e.code;
+            }
+            throw e;
         } finally {
             this.remove_process(bash.pid);
         }
@@ -499,7 +510,14 @@ export class Bash implements BashInterpreter, Process {
         if (shebang) {
             const interpreter = shebang[1];
             file = file.replace(/^#!(.+)\n/, '');
-            if (!this.is_executable(interpreter)) {
+            let executable = false;
+            try {
+                executable = await this.is_executable(interpreter);
+            } catch(e) {
+                // there is no such file - reported below like any other
+                // interpreter that cannot be run
+            }
+            if (!executable) {
                 const msg = `bash: ${filename}: ${interpreter}: bad interpreter: No such file or directory`;
                 throw new Error(msg);
             }
@@ -679,12 +697,14 @@ export class Bash implements BashInterpreter, Process {
         if (!filename) {
             throw new Error(`bash: ${command}: Command not found`);
         }
+        let executable;
         try {
-            if (!this.is_executable(filename)) {
-                throw new Error(`bash: ${command}: Permission denied`);
-            }
+            executable = await this.is_executable(filename);
         } catch(e) {
             throw new Error(`bash: ${command}: not found`);
+        }
+        if (!executable) {
+            throw new Error(`bash: ${command}: Permission denied`);
         }
         return filename;
     }
@@ -845,8 +865,9 @@ export class Bash implements BashInterpreter, Process {
                         stdout.clear();
                     }
                     if (ast.operator === '>>') {
-                        const file = await fs.readFile(fullname, 'utf8');
-                        content = file + content;
+                        // appending to a file that is not there yet creates it
+                        const file = await this.content(fullname);
+                        content = (file ?? '') + content;
                     }
                     await fs.writeFile(fullname, content);
                     break;
@@ -993,63 +1014,50 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    protected async use_default(ast: ParameterExpansionPart, strict: boolean, set = false) {
-        if (ast.operand) {
-            let variable;
-            try {
-                variable = this.get_variable(ast.parameter.substring(1));
-                if (strict && !variable) {
-                    return '';
-                }
-            } catch(e) {
-                // ignore
-            }
-            if (ast.operand && !variable) {
-                const value = await this.resolve(ast.operand);
-                if (set) {
-                    this.set_variable(ast.parameter, value);
-                }
-                return value;
-            }
+    // ${var-word} / ${var:-word} and ${var=word} / ${var:=word}
+    //
+    // Bash tells an unset variable from one set to the empty string, and the
+    // colon is what asks for the second to count as well. This shell keeps no
+    // such distinction - get_variable() answers '' for a name it has never
+    // seen - so both spellings of each operator do the same thing here
+    // -------------------------------------------------------------------------
+    protected async use_default(ast: ParameterExpansionPart, set = false) {
+        const variable = this.get_variable(ast.parameter);
+        if (variable.length) {
+            return variable;
         }
-        return '';
+        if (!ast.operand) {
+            return '';
+        }
+        const value = await this.resolve(ast.operand);
+        if (set) {
+            this.set_variable(ast.parameter, value);
+        }
+        return value;
     }
 
     // -------------------------------------------------------------------------
-    protected async use_alternative(ast: ParameterExpansionPart, strict: boolean) {
-        if (ast.operand) {
-            try {
-                const variable = this.get_variable(ast.parameter);
-                if (!variable && !strict) {
-                    return '';
-                }
-                if (ast.operand) {
-                    return await this.resolve(ast.operand);
-                }
-            } catch(e) {
-                // ignore
-            }
+    // ${var+word} / ${var:+word} - the mirror image: the word is used only
+    // when the variable has a value of its own
+    // -------------------------------------------------------------------------
+    protected async use_alternative(ast: ParameterExpansionPart) {
+        const variable = this.get_variable(ast.parameter);
+        if (!variable.length || !ast.operand) {
+            return '';
         }
-        return '';
+        return await this.resolve(ast.operand);
     }
 
     // -------------------------------------------------------------------------
-    protected async show_error(ast: ParameterExpansionPart, strict: boolean) {
-        if (ast.operator) {
-            try {
-                const variable = this.get_variable(ast.parameter);
-                if (!variable && !strict) {
-                    throw new Error();
-                }
-                return variable;
-            } catch(e) {
-                if (ast.operand) {
-                    const err = await this.resolve(ast.operand);
-                    throw new Error(err || 'bash: var: parameter null or not set');
-                }
-            }
+    // ${var?word} / ${var:?word}
+    // -------------------------------------------------------------------------
+    protected async show_error(ast: ParameterExpansionPart) {
+        const variable = this.get_variable(ast.parameter);
+        if (variable.length) {
+            return variable;
         }
-        return '';
+        const message = ast.operand ? await this.resolve(ast.operand) : '';
+        throw new Error(message || `bash: ${ast.parameter}: parameter null or not set`);
     }
 
     // -------------------------------------------------------------------------
@@ -1073,23 +1081,22 @@ export class Bash implements BashInterpreter, Process {
                 case '%%':
                     return this.trim(ast, false, true);
                 case '-':
-                    return this.use_default(ast, true);
                 case ':-':
-                    return this.use_default(ast, false);
+                    return this.use_default(ast);
                 case '=':
-                    return this.use_default(ast, true, true);
                 case ':=':
-                    return this.use_default(ast, false, true);
+                    return this.use_default(ast, true);
                 case '+':
-                    return this.use_alternative(ast, true);
                 case ':+':
-                    return this.use_alternative(ast, false);
+                    return this.use_alternative(ast);
                 case '?':
-                    return this.show_error(ast, true);
                 case ':?':
-                    return this.show_error(ast, false);
+                    return this.show_error(ast);
                 case '^': {
                     const variable = this.get_variable(ast.parameter).toString();
+                    if (!variable) {
+                        return '';
+                    }
                     return variable[0].toUpperCase() + variable.substring(1);
                 }
                 case '^^': {
@@ -1213,7 +1220,7 @@ export class Bash implements BashInterpreter, Process {
         const code = args.length === 1 ?
             parseInt(args[0], 10) :
             parseInt(this.get_variable('?') as string, 10) || 0;
-        throw new Signal(code);
+        throw new Exit(code);
     }
 
     // -------------------------------------------------------------------------
@@ -1285,15 +1292,30 @@ export class Bash implements BashInterpreter, Process {
             command = 'test';
         }
         const builtin = ('builtin_' + command) as keyof BashInterpreter;
+        // builtins run outside the try on purpose: `exit` unwinds the script by
+        // raising, and catching it here would turn it into an ordinary status
+        // and let the script carry on
+        if (typeof this[builtin] === 'function') {
+            return this[builtin](args);
+        }
+        const [input_redir, output_redir] = this.split_redirects(ast);
+        const { stdout, stderr } = this._context;
+        // only the stream a redirect names is swapped out - `>` must not
+        // swallow what the command has to say on stderr. The replacement is a
+        // silent one so that a command flushing as it goes still ends up with
+        // everything it wrote in the buffer the file is written from
+        const capture_stdout = output_redir.some(redirect => redirect.fileDescriptor !== 2);
+        const capture_stderr = output_redir.some(redirect => redirect.fileDescriptor === 2);
         let code = 0;
         try {
-            if (typeof this[builtin] === 'function') {
-                return this[builtin](args);
+            if (capture_stdout) {
+                this._context.stdout = new SilientOutput();
+            }
+            if (capture_stderr) {
+                this._context.stderr = new SilientOutput();
             }
             // input redirects run before the command they need
             // setup and teardown so they use exec as a callback
-            const [input_redir, output_redir] = this.split_redirects(ast);
-            const { stdout, stderr } = this._context;
             if (input_redir.length) {
                 for (const redirect of input_redir) {
                     await this.redirect(redirect, async () => {
@@ -1301,28 +1323,35 @@ export class Bash implements BashInterpreter, Process {
                     });
                 }
             } else {
-                // we use silet output so the process can use
-                // flush even if the output is redirected to to a file
-                if (output_redir.length) {
-                    this._context.stdout = new SilientOutput();
-                    this._context.stderr = new SilientOutput();
-                }
                 code = await this.exec(command, ...args);
-            }
-            if (output_redir.length) {
-                for (const redirect of output_redir) {
-                    await this.redirect(redirect);
-                }
-                this._context.stderr = stderr;
-                this._context.stdout = stdout;
             }
         } catch(e) {
             // process was killed
             if (e instanceof Signal) {
-                return e.code;
+                code = e.code;
+            } else {
+                code = 1;
+                this._context.stderr.writeln((e as Error).message);
             }
-            code = 1;
-            this._context.stderr.writeln((e as Error).message);
+        } finally {
+            // the file a redirect names is written whether the command
+            // succeeded or not, and the streams always go back to the terminal
+            // - a command that raised must not leave the shell writing into a
+            // buffer nobody reads
+            let error = null;
+            try {
+                for (const redirect of output_redir) {
+                    await this.redirect(redirect);
+                }
+            } catch(e) {
+                error = e as Error;
+            }
+            this._context.stdout = stdout;
+            this._context.stderr = stderr;
+            if (error) {
+                code = 1;
+                this._context.stderr.writeln(error.message);
+            }
         }
         if (!this._pipe) {
             const { stdout, stderr } = this._context;
@@ -1369,6 +1398,19 @@ export class Bash implements BashInterpreter, Process {
             }
         }
         return code;
+    }
+
+    // -------------------------------------------------------------------------
+    // ( ... ) runs in a shell of its own, so nothing it does to the working
+    // directory or to its variables is visible afterwards
+    // -------------------------------------------------------------------------
+    protected async Subshell(ast: Subshell) {
+        const bash = this.fork();
+        try {
+            return await bash.dispatch(ast.body);
+        } finally {
+            this.remove_process(bash.pid);
+        }
     }
 
     // -------------------------------------------------------------------------
