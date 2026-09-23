@@ -287,6 +287,95 @@ describe('serialize', () => {
     });
 });
 
+// mitty keeps a value whose methods are the point of it on this side and
+// hands the worker a handle, with no serialize() hook anywhere - this is that
+// default working end to end over a real channel
+describe('values that need their methods', () => {
+    // the shape that started this: methods on the prototype, data of its own
+    class Stat {
+        type: string;
+        size: number;
+        constructor(type: string, size: number) {
+            this.type = type;
+            this.size = size;
+        }
+        isFile() {
+            return this.type === 'file';
+        }
+    }
+
+    async function stat_bash() {
+        return create_bash({
+            modules: {
+                fs_like: () => ({
+                    stat: (name: string) =>
+                        new Stat(name.endsWith('/') ? 'dir' : 'file', 12),
+                    readdir: () => ['one', 'two']
+                })
+            }
+        });
+    }
+
+    it('keeps a prototype method callable from the worker', async () => {
+        const { bash, cleanup } = await stat_bash();
+        const { worker, exit } = await start(bash, program);
+        const stat = await worker.require('fs_like').stat('/home/guest/notes.txt');
+        expect(await stat.isFile()).toBe(true);
+        expect(await stat.size).toBe(12);
+        worker.exit();
+        await exit;
+        cleanup();
+    });
+
+    it('answers for a directory too', async () => {
+        const { bash, cleanup } = await stat_bash();
+        const { worker, exit } = await start(bash, program);
+        const stat = await worker.require('fs_like').stat('/home/guest/');
+        expect(await stat.isFile()).toBe(false);
+        worker.exit();
+        await exit;
+        cleanup();
+    });
+
+    it('still copies an array of data across', async () => {
+        const { bash, cleanup } = await stat_bash();
+        const { worker, exit } = await start(bash, program);
+        expect(await worker.require('fs_like').readdir()).toEqual(['one', 'two']);
+        worker.exit();
+        await exit;
+        cleanup();
+    });
+
+    // an Error inherits toString() from Error.prototype, so has_methods() says
+    // yes to one - mitty encodes errors before serialize() ever sees them, and
+    // a program has to catch a real Error rather than a handle to one
+    it('does not turn an error into a handle', async () => {
+        const { bash, cleanup } = await create_bash({
+            modules: {
+                fails: () => ({
+                    open: () => {
+                        throw new Error('ENOENT: no such file or directory');
+                    }
+                })
+            }
+        });
+        const { worker, exit } = await start(bash, program);
+        let caught: unknown;
+        try {
+            await worker.require('fails').open();
+        } catch (error) {
+            caught = error;
+        }
+        expect(caught).toBeInstanceOf(Error);
+        expect((caught as Error).message).toBe('ENOENT: no such file or directory');
+        // what a program printing the error actually gets
+        expect(String(caught)).toBe('Error: ENOENT: no such file or directory');
+        worker.exit();
+        await exit;
+        cleanup();
+    });
+});
+
 describe('a program that does not parse', () => {
     it('is refused before a worker is started', async () => {
         const { bash, cleanup } = await create_bash();

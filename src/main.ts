@@ -163,26 +163,6 @@ class Input implements Stdin {
 }
 
 // -----------------------------------------------------------------------------
-// jQuery/jQuery Terminal specific bits live here so the Bash interpreter
-// itself has no dependency on jQuery
-// -----------------------------------------------------------------------------
-class TerminalBash extends Bash {
-    protected serialize(value: unknown, remote: (value: unknown) => unknown): unknown {
-        // jQuery objects (e.g. wrap DOM nodes, including terminal instances
-        // returned by $.terminal.active()) can't be sent over
-        // BroadcastChannel as-is - expose them as a remote handle instead so
-        // worker scripts can still call methods on them
-        if (value instanceof ($ as any).fn.init) {
-            return remote(value);
-        }
-        return super.serialize(value, remote);
-    }
-    protected unserialize(value: unknown): unknown {
-        return super.unserialize(value);
-    }
-}
-
-// -----------------------------------------------------------------------------
 const intepreter = rpc({ url: rpc_url }).then(async (service) => {
     const _fs = new LightningFS('rpc', { db: new RPCBackend(service) as any });
     const fs = _fs.promises as unknown as PromisifiedFS;
@@ -312,7 +292,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
             }
         },
         // ---------------------------------------------------------------------
-        async vi(this: BashContext, arg?: string): Promise<number> {
+        async __vi(this: BashContext, arg?: string): Promise<number> {
             if (!arg) {
                 throw new Error('Usage: vi [filename]');
             }
@@ -445,7 +425,7 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
         '$': () => $
     };
 
-    const bash = new TerminalBash(commands, {
+    const bash = new Bash(commands, {
         stdout,
         stderr,
         stdin,

@@ -144,6 +144,9 @@ Terminal) is left to end-to-end tests.
 * Bash expands aliases before processing keyboards, which allows changing syntax. By design
 Hacking Cafe will only expand aliases as commands.
 * `$@` works the same as `"$@"` (it may change).
+* An error a JavaScript program catches from `require()` arrives with its `name`, `message` and
+the main thread's `stack`, but not custom properties — `e.code` is undefined, so match on the
+message to tell `ENOENT` from a real failure.
 
 ## Commercial License
 

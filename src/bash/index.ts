@@ -367,24 +367,6 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    // public serilize/unserlize interface for sub class
-    //
-    // serialize() is handed a remote() function for the worker it is talking
-    // to: values that can't cross the BroadcastChannel as-is (class instances
-    // with methods, DOM-backed objects) go through it and reach the worker as
-    // a handle it can call methods on instead. Handles belong to that one
-    // worker and are dropped when its process exits.
-    // -------------------------------------------------------------------------
-    protected serialize(value: unknown, _remote: Remote): unknown {
-        return value;
-    }
-
-    // -------------------------------------------------------------------------
-    protected unserialize(value: unknown): unknown {
-        return value;
-    }
-
-    // -------------------------------------------------------------------------
     // mitty Host for one worker: it listens on the worker's channel and
     // resolves the chains of property accesses and calls that require()
     // records on the other side.
@@ -395,18 +377,9 @@ export class Bash implements BashInterpreter, Process {
     // would be delivered to the wrong pending call
     // -------------------------------------------------------------------------
     private create_host(channel: BroadcastChannel) {
-        const serialize = this.serialize.bind(this);
-        const unserialize = this.unserialize.bind(this);
-        const resolve = this.resolve_module.bind(this);
         return new Host({
             channel,
-            resolve,
-            // `this` is the Host, so handles are registered against the worker
-            // that asked for them
-            serialize(value: unknown) {
-                return serialize(value, remote => this.remote(remote));
-            },
-            unserialize
+            resolve: (value) => this.resolve_module(value)
         });
     }
 
