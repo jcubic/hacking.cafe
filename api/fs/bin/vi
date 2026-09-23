@@ -1,0 +1,76 @@
+#!/bin/js
+
+const $ = require('$');
+const bash = require('bash');
+const fs = require('fs');
+const vi = require('jsvi');
+
+async function main(arg) {
+    if (!arg) {
+        throw new Error('Usage: vi [filename]');
+    }
+    let $node = await $('#vi');
+    // the chain has to be awaited - `$node.length` on its own is a pending
+    // remote chain, which is truthy no matter what the textarea count is
+    if (!(await $node.length)) {
+        const css = 'https://cdn.jsdelivr.net/npm/jsvi/vi.css';
+        await $(`<link href="${css}" rel="stylesheet" />`).appendTo('head');
+        $node = await $('<textarea id="vi"/>').appendTo('body');
+    }
+    const textarea = await $node.get(0);
+    const filename = await bash.resolve_path(arg);
+
+    let stat;
+    try {
+        stat = await fs.stat(filename);
+    } catch(e) {
+        // a file that isn't there yet is vi's "new file" case - it gets
+        // created on the first save. Anything else is a real failure and
+        // should not look like an empty buffer.
+        // the error arrives from the main thread with its name, message and
+        // stack, but not its `code`, so the message is what there is to go on
+        if (!/ENOENT/.test(e.message)) {
+            throw e;
+        }
+    }
+
+    let content = '';
+    if (stat) {
+        // stat is a handle to the Stat on the main thread, so isFile() runs
+        // over there - it is a method, and methods don't survive the channel
+        if (!(await stat.isFile())) {
+            throw new Error(`vi: ${arg}: not a regular file`);
+        }
+        content = await fs.readFile(filename, 'utf8');
+    }
+
+    await $node.val(content);
+    const $term = await $.terminal.active();
+    await $term.blur();
+
+    // the editor tells us it is done through onExit/onSave, so main() has to
+    // keep a promise open for it rather than returning when vi() does
+    const { promise, resolve, reject } = Promise.withResolvers();
+    let writing = Promise.resolve();
+    const editor = await vi(textarea, {
+        padding: 10,
+        onSave: async () => {
+            const content = await editor.freeze();
+            // one save at a time, so a fast second save can't race the first
+            writing = writing.then(async () => {
+                await fs.writeFile(filename, content);
+            });
+            try {
+                await writing;
+            } catch(e) {
+                await $term.focus();
+                reject(new Error(e.message));
+            }
+        },
+        onExit: async () => {
+            await $term.focus();
+            resolve(0);
+        }
+    });
+    return promise;
+}

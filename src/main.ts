@@ -21,7 +21,6 @@ import rpc from '@jcubic/json-rpc';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import path from 'path-browserify';
 import { z } from 'zod';
-import 'jsvi/vi.css';
 
 import { $, JQueryTerminal } from './terminal';
 import { make_jargon } from './jargon';
@@ -290,52 +289,6 @@ const intepreter = rpc({ url: rpc_url }).then(async (service) => {
                     this.stderr.writeln((err as Error).message);
                 }
             }
-        },
-        // ---------------------------------------------------------------------
-        async __vi(this: BashContext, arg?: string): Promise<number> {
-            if (!arg) {
-                throw new Error('Usage: vi [filename]');
-            }
-            const vi = (await import('jsvi')).default;
-            return new Promise(async (resolve, reject) => {
-                const $node = $('#vi') as JQuery<HTMLTextAreaElement>;
-                const textarea = $node.get(0) as HTMLTextAreaElement;
-                let content;
-                let stat;
-                const filename = this.bash.resolve_path(arg);
-                try {
-                    const stat = await this.fs.stat(filename);
-                    if (stat.isFile()) {
-                        content = await this.fs.readFile(filename, 'utf8');
-                    }
-                } catch(e) {
-                }
-                if (stat && content === undefined) {
-                    throw new Error(`Invalid file ${arg}`);
-                }
-                content ??= '';
-                $node.val(content);
-                term.blur();
-                let write_promise: Promise<void>;
-                const editor = vi(textarea, {
-                    padding: 10,
-                    onSave: async() => {
-                        const content = editor.freeze();
-                        await write_promise;
-                        try {
-                            write_promise = this.fs.writeFile(filename, content);
-                        } catch(e) {
-                            term.focus();
-                            reject(new Error((e as Error).message));
-                        }
-                    },
-                    onExit: () => {
-                        term.focus();
-                        resolve(0);
-                    }
-                });
-                (term as any).vi = editor;
-            });
         },
         // ---------------------------------------------------------------------
         credits(this: BashContext) {

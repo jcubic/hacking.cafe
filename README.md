@@ -111,7 +111,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x] `/bin/js`
   - [x] `/bin/python`
   - [x] `/bin/sleep`
-  - [x] `vi` ([jsvi](https://github.com/jcubic/jsvi))
+  - [x] `/bin/vi` ([jsvi](https://github.com/jcubic/jsvi))
   - [ ] `/bin/nano` ([micro](https://github.com/jcubic/jquery.micro) - add to npm)
 
 ### Unix
