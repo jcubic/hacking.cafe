@@ -3,3 +3,4 @@ dist
 api/vendor/
 api/*.db
 api/.env
+coverage

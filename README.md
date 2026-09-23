@@ -2,6 +2,9 @@
 
 # Hacking Cafe
 
+[![CI](https://github.com/jcubic/hacking.cafe/actions/workflows/ci.yaml/badge.svg)](https://github.com/jcubic/hacking.cafe/actions/workflows/ci.yaml)
+[![Coverage Status](https://coveralls.io/repos/github/jcubic/hacking.cafe/badge.svg?branch=master)](https://coveralls.io/github/jcubic/hacking.cafe?branch=master)
+
 </div>
 
 This project is a continuation of [Fake Linux Terminal](https://github.com/jcubic/fake-linux-terminal).
@@ -117,6 +120,26 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] `/etc/motd`
 - [ ] `/etc/group`
 - [ ] `CTRL+D` stop the process
+
+## Tests
+
+The Bash module is covered by unit tests that run in Node with [Vitest](https://vitest.dev/):
+
+```bash
+npm test              # run the suite once
+npm run test:watch    # re-run on change
+npm run coverage      # run with a coverage report in coverage/
+```
+
+They run on a real LightningFS backed by memory, so file modes, symlinks and error codes
+behave as they do in the browser. The worker IPC is tested by standing in for the Web Worker
+and talking to the shell's mitty Host over the same channel the worker prelude uses — see
+`test/helpers/`. Anything that needs a real browser (the worker prelude itself, jQuery
+Terminal) is left to end-to-end tests.
+
+`test/known-bugs.test.ts` holds tests written the way the shell is *supposed* to behave for
+bugs that are not fixed yet. They are marked `it.fails`, so the suite stays green and vitest
+reports a test there as failing once the bug behind it is fixed.
 
 ## Limitations
 
