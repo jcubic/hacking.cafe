@@ -83,7 +83,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 - [ ] `env` command
 - [ ] scripts in fs as REPLs
-  - [ ] `/bin/js` repl and interpreter
+  - [x] `/bin/js` repl and interpreter
   - [ ] `/bin/bash` as subshell
   - [ ] `/bin/php` using uniter [demo](https://codepen.io/jcubic/pen/VGYBVj)
   - [ ] `/bin/head`
@@ -109,6 +109,8 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ] `/bin/uname`
   - [ ] `/bin/hostname`
   - [x] `/bin/js`
+  - [ ] `/bin/lolcat`
+  - [ ] `/bin/fortune`
   - [x] `/bin/python`
   - [x] `/bin/sleep`
   - [x] `/bin/vi` ([jsvi](https://github.com/jcubic/jsvi))
@@ -121,7 +123,15 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] `/etc/issue`
 - [ ] `/etc/motd`
 - [ ] `/etc/group`
-- [ ] `CTRL+D` stop the process
+- [x] `CTRL+D` stop the process
+
+### Custom Commands
+* `fetch` (neofetch)
+* `rfc` (RFC viewer using `less`)
+* `less`
+* `record` - save commands URL hash
+* `credits`
+* `help`
 
 ## Tests
 
