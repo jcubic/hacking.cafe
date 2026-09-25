@@ -364,3 +364,11 @@ export class Exit extends Error {
         return this._code;
     }
 }
+
+// -----------------------------------------------------------------------------
+// the prelude's exit report, told apart from mitty's JSON strings on the pipe
+// the two of them share
+// -----------------------------------------------------------------------------
+export function is_exit(data: unknown): data is { exit: number } {
+    return typeof data === 'object' && data !== null && 'exit' in data;
+}

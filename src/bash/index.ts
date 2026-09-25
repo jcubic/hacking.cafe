@@ -23,6 +23,7 @@ import { parse } from 'unbash';
 import path from 'path-browserify';
 import parse_options from '@jcubic/lily';
 import { Host } from '@jcubic/mitty';
+import type { Channel } from '@jcubic/mitty';
 
 import type {
     If,
@@ -35,6 +36,7 @@ import type {
     Command,
     Redirect,
     Pipeline,
+    Function,
     Subshell,
     WordPart,
     Statement,
@@ -75,6 +77,7 @@ import {
     char,
     Exit,
     Signal,
+    is_exit,
     glob_to_regex,
     import_module,
     list_executables
@@ -115,19 +118,16 @@ class WorkerProcess implements Process {
     private _pid: number;
     private _worker: Worker;
     private _name: string;
-    private _channel: BroadcastChannel;
     private _host: Host;
     constructor(
         pid: number,
         name: string,
         worker: Worker,
-        channel: BroadcastChannel,
         host: Host
     ) {
         this._pid = pid;
         this._worker = worker;
         this._name = name;
-        this._channel = channel;
         this._host = host;
     }
     public terminate() {
@@ -139,7 +139,6 @@ class WorkerProcess implements Process {
     // on its behalf have to be dropped
     public close() {
         this._host.close();
-        this._channel.close();
     }
     get name() {
         return this._name;
@@ -348,7 +347,7 @@ export class Bash implements BashInterpreter, Process {
     // -------------------------------------------------------------------------
     // we need to add aditional code to the worker scripts for them to work
     // -------------------------------------------------------------------------
-    private process(code: string, args: string[], pid: number) {
+    private process(code: string, args: string[]) {
         const _args = JSON.stringify(args)
         // the worker runs from a blob: URL, whose path is opaque - nothing
         // relative resolves against it, so mitty has to be named absolutely
@@ -357,7 +356,6 @@ export class Bash implements BashInterpreter, Process {
         // "$"-sequences in `code` (e.g. require('$') for the jQuery module)
         // interpreted as special patterns like $&/$'/$`, corrupting the output
         return proceess_wrapper.replace('{{ARGS}}', () => _args)
-            .replace('{{PID}}', () => JSON.stringify(pid))
             .replace('{{MITTY}}', () => mitty)
             .replace('{{CODE}}', () => code);
     }
@@ -372,7 +370,7 @@ export class Bash implements BashInterpreter, Process {
     // did, their independent RPC id counters could collide and responses
     // would be delivered to the wrong pending call
     // -------------------------------------------------------------------------
-    private create_host(channel: BroadcastChannel) {
+    private create_host(channel: Channel) {
         return new Host({
             channel,
             resolve: (value) => this.resolve_module(value)
@@ -407,25 +405,25 @@ export class Bash implements BashInterpreter, Process {
         // the next process gets handed, since pids are reused
         new Function(file);
         const pid = this.next_pid;
-        // every worker (even one spawned by another worker calling back into
-        // bash.exec_js, e.g. /bin/js launching the script it interprets)
-        // gets its own channel keyed by its own pid, so independent RPC id
-        // counters from concurrent/nested workers never collide
-        const channel = new BroadcastChannel(`__ipc__:${pid}`);
-        const host = this.create_host(channel);
-        const code = this.process(file, args, pid);
+        const code = this.process(file, args);
         const blob = new Blob([code], {
             type: 'application/javascript'
         });
         const worker = new Worker(URL.createObjectURL(blob));
-        Bash._procs.push(new WorkerProcess(pid, filename, worker, channel, host));
+        // the worker's own pipe carries the RPC now, so the host and the exit
+        // signal below share it - no channel to name, open or close
+        const host = this.create_host(worker);
+        Bash._procs.push(new WorkerProcess(pid, filename, worker, host));
         return new Promise<number>((resolve) => {
             worker.addEventListener('message', message => {
-                if ('exit' in message.data) {
-                    const code = message.data.exit;
-                    this.remove_process(pid);
-                    resolve(code);
+                // mitty's traffic arrives here too. It is always a JSON
+                // string, and this process only ever sends objects, so the
+                // type is what tells them apart - `'exit' in aString` throws
+                if (!is_exit(message.data)) {
+                    return;
                 }
+                this.remove_process(pid);
+                resolve(message.data.exit);
             });
         });
     }
@@ -1426,6 +1424,17 @@ export class Bash implements BashInterpreter, Process {
             }
         }
         return result;
+    }
+
+    protected async Function(ast: Function) {
+        if (ast.name.parts) {
+            throw new Error(`bash: \`${ast.name.text}': not a valid identifier`);
+        }
+        if (ast.body.type !== 'BraceGroup') {
+            throw new Error(`bash: syntax error for function \`${ast.name.text}'`);
+        }
+        const body = ast.body.body;
+        console.log(body);
     }
 
     // -------------------------------------------------------------------------

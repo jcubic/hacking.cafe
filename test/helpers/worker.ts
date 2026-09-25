@@ -27,35 +27,32 @@
  *  along with Hacking Cafe.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import { connect } from '@jcubic/mitty';
+import { connect, Channel, ChannelListener } from '@jcubic/mitty';
 
 type Client = ReturnType<typeof connect>;
-type Listener = (event: { data: unknown }) => void;
 
 const blobs = new Map<string, Blob>();
 let counter = 0;
 
-// An open BroadcastChannel keeps Node's event loop alive, so every channel
-// opened while the fake worker is installed is recorded and closed on the way
-// out - a test that leaves one behind would hold up the whole run.
-const channels: BroadcastChannel[] = [];
-
-class TrackedChannel extends BroadcastChannel {
-    constructor(name: string) {
-        super(name);
-        channels.push(this);
-    }
-}
-
-export class FakeWorker {
+// A Worker and the `self` inside it are two endpoints, and neither ever hears
+// its own messages. Modelling them as one endpoint deadlocks the run: the
+// client resolves its own request with undefined, and the host reads its own
+// reply back as a request, finds no module name in it, and answers its own
+// error report forever.
+//
+// So the two directions are kept apart. The FakeWorker is the main thread's
+// view - post to it and the code inside hears it. `worker.self` is the view
+// from inside, and is what the prelude passes to Mitty.connect().
+export class FakeWorker implements Channel {
     static instances: FakeWorker[] = [];
     // resolves once the worker has read its source and joined the channel
     readonly ready: Promise<void>;
     terminated = false;
     code = '';
-    pid = -1;
-    private _listeners: Listener[] = [];
-    private _channel?: BroadcastChannel;
+    // listeners on the main thread, waiting for worker -> main
+    private _outside: ChannelListener[] = [];
+    // listeners inside the worker, waiting for main -> worker
+    private _inside: ChannelListener[] = [];
     private _client?: Client;
 
     constructor(url: string) {
@@ -68,14 +65,11 @@ export class FakeWorker {
         if (!blob) {
             throw new Error(`FakeWorker: nothing was registered for ${url}`);
         }
+        await new Promise(resolve => {
+            setTimeout(resolve, 100);
+        });
         this.code = await blob.text();
-        const match = this.code.match(/__ipc__:(\d+)/);
-        if (!match) {
-            throw new Error('FakeWorker: the prelude names no channel');
-        }
-        this.pid = parseInt(match[1], 10);
-        this._channel = new BroadcastChannel(`__ipc__:${this.pid}`);
-        this._client = connect(this._channel);
+        this._client = connect(this.self);
     }
 
     // the modules the shell exposes, as the script inside the worker sees them
@@ -86,21 +80,56 @@ export class FakeWorker {
         return this._client.require;
     }
 
-    addEventListener(_type: string, listener: Listener) {
-        this._listeners.push(listener);
+    // -------------------------------------------------------------------------
+    // the main thread's side: this object stands in for the Worker
+    // -------------------------------------------------------------------------
+    postMessage(message: string) {
+        FakeWorker._deliver(this._inside, message);
     }
 
-    // what the prelude does when main() returns
-    exit(code = 0) {
-        for (const listener of this._listeners) {
-            listener({ data: { exit: code } });
+    addEventListener(_type: 'message', listener: ChannelListener) {
+        this._outside.push(listener);
+    }
+
+    removeEventListener(_type: 'message', listener: ChannelListener) {
+        this._outside = this._outside.filter(fn => fn !== listener);
+    }
+
+    // -------------------------------------------------------------------------
+    // the worker's side: what `self` is to the code running inside
+    // -------------------------------------------------------------------------
+    get self(): Channel {
+        return {
+            postMessage: (message: string) => {
+                FakeWorker._deliver(this._outside, message);
+            },
+            addEventListener: (_type: 'message', listener: ChannelListener) => {
+                this._inside.push(listener);
+            },
+            removeEventListener: (_type: 'message', listener: ChannelListener) => {
+                this._inside = this._inside.filter(fn => fn !== listener);
+            }
+        };
+    }
+
+    // postMessage queues rather than calling straight through, so a listener
+    // never runs inside the send that caused it
+    private static _deliver(listeners: ChannelListener[], data: unknown) {
+        for (const listener of [...listeners]) {
+            queueMicrotask(() => listener({ data } as { data: string }));
         }
+    }
+
+    // what the prelude does when main() returns: self.postMessage({ exit }).
+    // An object, not a string, and it reaches the main thread - the same pipe
+    // mitty uses, which is why exec_js has to tell the two apart.
+    exit(code = 0) {
+        FakeWorker._deliver(this._outside, { exit: code });
     }
 
     terminate() {
         this.terminated = true;
         this._client?.close();
-        this._channel?.close();
     }
 }
 
@@ -111,12 +140,10 @@ export class FakeWorker {
 export function install_worker() {
     const globals = globalThis as Record<string, unknown>;
     const worker = globals.Worker;
-    const channel = globals.BroadcastChannel;
     const create = URL.createObjectURL;
     const revoke = URL.revokeObjectURL;
 
     globals.Worker = FakeWorker;
-    globals.BroadcastChannel = TrackedChannel;
     URL.createObjectURL = (blob: Blob) => {
         const url = `blob:test/${++counter}`;
         blobs.set(url, blob);
@@ -131,12 +158,8 @@ export function install_worker() {
             instance.terminate();
         }
         FakeWorker.instances = [];
-        while (channels.length) {
-            channels.pop()?.close();
-        }
         blobs.clear();
         globals.Worker = worker;
-        globals.BroadcastChannel = channel;
         URL.createObjectURL = create;
         URL.revokeObjectURL = revoke;
     };

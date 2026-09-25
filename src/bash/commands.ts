@@ -43,7 +43,6 @@ export function echo(this: BashContext, ...args: string[]) {
     // echo takes its options only from the front of the argument list, and
     // only the three it knows - a general option parser would eat any
     // argument that happens to start with a dash, wherever it appears
-    console.log({ args })
     const options = { e: false, n: false };
     while (args.length && args[0].match(/^-[neE]+$/)) {
         const flags = (args.shift() as string).substring(1);

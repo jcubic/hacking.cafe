@@ -23,8 +23,12 @@ afterEach(() => {
 // when the program exits, so the promise is kept for the test to finish off
 async function start(bash: Bash, code: string, args: string[] = []) {
     const exit = bash.exec_js('/bin/program', code, args);
+    // the prelude no longer names the pid - nothing in the worker needs it now
+    // that the RPC rides its own pipe - so read it off the entry exec_js has
+    // just pushed onto the process table
+    const pid = bash.procs.at(-1)?.pid as number;
     const worker = await last_worker();
-    return { worker, exit };
+    return { worker, exit, pid };
 }
 
 // the prelude drops the program into a block and calls main(), the way the
@@ -93,32 +97,34 @@ describe('exec_js', () => {
 describe('the process table', () => {
     it('holds the program while it runs', async () => {
         const { bash, cleanup } = await create_bash();
-        const { worker, exit } = await start(bash, program);
+        const { worker, exit, pid } = await start(bash, program);
+        // a pid of its own, not the shell's
+        expect(pid).not.toBe(bash.pid);
         expect(bash.procs).toContainEqual({
             name: 'program',
             path: '/bin/program',
-            pid: worker.pid
+            pid
         });
         worker.exit();
         await exit;
-        expect(bash.procs.map(proc => proc.pid)).not.toContain(worker.pid);
+        expect(bash.procs.map(proc => proc.pid)).not.toContain(pid);
         cleanup();
     });
 
     it('terminates the worker on kill', async () => {
         const { bash, cleanup } = await create_bash();
-        const { worker } = await start(bash, program);
-        await bash.kill(worker.pid);
+        const { worker, pid } = await start(bash, program);
+        await bash.kill(pid);
         expect(worker.terminated).toBe(true);
-        expect(bash.procs.map(proc => proc.pid)).not.toContain(worker.pid);
+        expect(bash.procs.map(proc => proc.pid)).not.toContain(pid);
         cleanup();
     });
 
-    it('gives concurrent programs channels of their own', async () => {
+    it('gives concurrent programs pipes of their own', async () => {
         const { bash, cleanup } = await create_bash();
         const first = await start(bash, program);
         const second = await start(bash, program);
-        expect(second.worker.pid).not.toBe(first.worker.pid);
+        expect(second.pid).not.toBe(first.pid);
         // each one still talks to the shell without crosstalk
         expect(await first.worker.require('bash').pid).toBe(bash.pid);
         expect(await second.worker.require('bash').pid).toBe(bash.pid);
@@ -380,26 +386,6 @@ describe('a program that does not parse', () => {
     it('is refused before a worker is started', async () => {
         const { bash, cleanup } = await create_bash();
         expect(() => bash.exec_js('/bin/broken', 'function (', [])).toThrow(SyntaxError);
-        cleanup();
-    });
-
-    // the channel has to be opened after the syntax check, not before: pids
-    // are reused, so a channel left behind here would answer on a name the
-    // next program is handed, alongside the host that program really has
-    it('leaves no channel behind', async () => {
-        const { bash, cleanup } = await create_bash();
-        expect(() => bash.exec_js('/bin/broken', 'function (', [])).toThrow(SyntaxError);
-        const { worker, exit } = await start(bash, program);
-        const spy = new BroadcastChannel(`__ipc__:${worker.pid}`);
-        const messages: unknown[] = [];
-        spy.onmessage = (event: MessageEvent) => messages.push(event.data);
-        expect(await worker.require('bash').cwd).toBe('/home/guest');
-        await new Promise(resolve => setTimeout(resolve, 10));
-        spy.close();
-        // one request, one answer
-        expect(messages).toHaveLength(2);
-        worker.exit();
-        await exit;
         cleanup();
     });
 });

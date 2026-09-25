@@ -14,18 +14,17 @@ importScripts('{{MITTY}}');
 // chain of property accesses and calls, and sends the whole chain in one
 // message when it is awaited. The channel is keyed by pid so concurrent or
 // nested workers never share one - their request ids would collide.
-const { require } = Mitty.connect(new BroadcastChannel(`__ipc__:{{PID}}`));
+const { require } = Mitty.connect(self);
 
 {
     {{CODE}}
 
     const args = {{ARGS}};
     (async () => {
-        const code = await main(...args);
+        const code = (await main(...args)) ?? 0;
         self.postMessage({ exit: code });
         self.close();
     })().catch(async error => {
-        console.log(error);
         await require('stderr').writeln(error.message);
         self.postMessage({ exit: 100 });
         self.close();
