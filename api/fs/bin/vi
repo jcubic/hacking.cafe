@@ -15,7 +15,7 @@ async function main(arg) {
     if (!(await $node.length)) {
         const css = 'https://cdn.jsdelivr.net/npm/jsvi/vi.css';
         await $(`<link href="${css}" rel="stylesheet" />`).appendTo('head');
-        $node = await $('<textarea id="vi"/>').appendTo('body');
+        $node = await $('<textarea id="vi"/>').appendTo('.terminal-panel');
     }
     const textarea = await $node.get(0);
     const filename = await bash.resolve_path(arg);
