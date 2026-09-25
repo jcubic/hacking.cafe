@@ -22,7 +22,11 @@ import LightningFS from '@isomorphic-git/lightning-fs';
 import path from 'path-browserify';
 import { z } from 'zod';
 
-import { $, JQueryTerminal } from './terminal';
+import splitter from 'jquery.splitter';
+import 'jquery.splitter/css/jquery.splitter.css';
+
+import { $ , JQueryTerminal } from './terminal';
+splitter(window, $);
 import { make_jargon } from './jargon';
 import { RPCBackend } from './fs';
 import type { ListDir } from './bash/types';
@@ -467,7 +471,7 @@ const formatter = new Intl.ListFormat('en', {
     type: 'conjunction',
 });
 
-const term = $('body').terminal(intepreter, {
+const term = $('#term').terminal(intepreter, {
     checkArity: false,
     execHash: true,
     exit: false,
@@ -494,6 +498,14 @@ const term = $('body').terminal(intepreter, {
     }
 });
 
+{
+    let splitter = split();
+    $(window).on('resize', debounce(() => {
+        splitter.destroy();
+        splitter = split();
+    }));
+}
+
 function display_rfc(rfc: string) {
     // RFC have leading and trailing whitespace
     rfc = rfc.trim();
@@ -502,3 +514,24 @@ function display_rfc(rfc: string) {
     rfc = rfc.replace(/>/g, '&gt;');
     term.less(rfc);
 }
+
+function split() {
+    return $('main').split({
+        orientation: window.innerWidth > 1000 ? 'vertical' : 'horizontal'
+    });
+}
+
+function debounce<T extends unknown[]>(
+  callback: (...args: T) => void,
+  delay: number = 300,
+) {
+  let timeoutTimer: ReturnType<typeof setTimeout>;
+
+  return (...args: T) => {
+    clearTimeout(timeoutTimer);
+
+    timeoutTimer = setTimeout(() => {
+      callback(...args);
+    }, delay);
+  };
+};
