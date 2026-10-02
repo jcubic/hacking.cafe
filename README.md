@@ -112,6 +112,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [ ] `/bin/mktemp`
   - [ ] `/bin/whoami`
   - [ ] `/bin/who`
+  - [ ] `/bin/date`
   - [ ] `/bin/uname`
   - [ ] `/bin/hostname`
   - [x] `/bin/js`
