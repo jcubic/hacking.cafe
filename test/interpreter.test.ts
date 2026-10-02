@@ -539,6 +539,19 @@ describe('functions', () => {
         expect(await output('hi() { echo from-function; }\nhi')).toBe('from-function\n');
         cleanup();
     });
+
+    it('return leaves the body early with a status', async () => {
+        const { run, output, cleanup } = await create_bash();
+        expect(await output('f() { echo a; return; echo b; }\nf')).toBe('a\n');
+        expect(await run('g() { return 3; }\ng')).toBe(3);
+        cleanup();
+    });
+
+    it('shift drops the first positional parameter', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { shift; echo "$1 $#"; }\nf a b')).toBe('b 1\n');
+        cleanup();
+    });
 });
 
 describe('function arguments', () => {
@@ -689,31 +702,6 @@ describe('function call redirects', () => {
         await expect(bash.evaluate('f() { echo hi; exit 7; }\nf > out.txt'))
             .rejects.toHaveProperty('code', 7);
         expect(await fs.readFile('/home/guest/out.txt', 'utf8')).toBe('hi\n');
-        cleanup();
-    });
-});
-
-// -----------------------------------------------------------------------------
-// What functions cannot do yet. These are the behaviours bash has, written out
-// so the fix has something to turn green - they are skipped, not missing, on
-// purpose: each one is a gap in the current implementation, not a wrong
-// expectation.
-// -----------------------------------------------------------------------------
-describe('functions (exit shift)', () => {
-    // there is no `return` builtin, so the body always runs to the end and the
-    // name resolves as an ordinary command that is not found
-    it('return leaves the body early with a status', async () => {
-        const { run, output, cleanup } = await create_bash();
-        expect(await output('f() { echo a; return; echo b; }\nf')).toBe('a\n');
-        expect(await run('g() { return 3; }\ng')).toBe(3);
-        cleanup();
-    });
-
-    // there is no `shift` builtin either, and walking the arguments of a
-    // function is most of what it is for
-    it('shift drops the first positional parameter', async () => {
-        const { output, cleanup } = await create_bash();
-        expect(await output('f() { shift; echo "$1 $#"; }\nf a b')).toBe('b 1\n');
         cleanup();
     });
 });
