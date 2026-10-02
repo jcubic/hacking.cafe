@@ -820,8 +820,7 @@ export class Bash implements BashInterpreter, Process {
             switch (ast.operator[0]) {
                 case '>': {
                     const { fs, stdout, stderr } = this._context;
-                    // TODO: resolve ast.target
-                    const file = ast.target.value;
+                    const file = await this.resolve(ast.target);
                     const fullname = this.resolve_path(file);
                     let content;
                     if (ast.fileDescriptor === 2) {
@@ -841,8 +840,7 @@ export class Bash implements BashInterpreter, Process {
                 }
                 case '<': {
                     const { fs, stdin } = this._context;
-                    // TODO: resolve ast.target
-                    const file = ast.target.value;
+                    const file = await this.resolve(ast.target);
                     const fullname = this.resolve_path(file);
                     const content = await fs.readFile(fullname, 'utf8');
                     this._context.stdin = new PipeStdin(content);
