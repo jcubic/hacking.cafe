@@ -57,7 +57,13 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [ ] glob patterns
 - [x] `test` command
 - [ ] aliases
-- [ ] functions
+- [x] functions
+  - [x] `name() { ...; }` and `function name { ...; }`
+  - [x] positional parameters `$1`, `$#`, `$*`, `$@` scoped to the call
+  - [x] visible in subshells, pipelines and command substitution
+  - [x] redirects on the call, `f > file`
+  - [x] `return`
+  - [x] `shift`
 - [ ] order: keywords => aliases => function => builtins => executables
 - [x] `printf`
 - [x] `kill`

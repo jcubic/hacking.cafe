@@ -76,6 +76,7 @@ import {
     date,
     char,
     Exit,
+    Return,
     Signal,
     is_exit,
     glob_to_regex,
@@ -148,6 +149,8 @@ class WorkerProcess implements Process {
     }
 }
 
+type FunctionEnvironment = {[key: string]: Function['body']};
+
 export class Bash implements BashInterpreter, Process {
     // object containing builtin and user commands
     private _commands: Commands;
@@ -155,6 +158,7 @@ export class Bash implements BashInterpreter, Process {
     private _globals: Environment;
     // locals are without
     private _locals: Environment;
+    private _functions: FunctionEnvironment;
     // temporary variables for new process
     private _tmp_env: Environment;
     // context is object that is passed to builtin commands as this
@@ -186,6 +190,7 @@ export class Bash implements BashInterpreter, Process {
         this._globals = Object.create(null);
         this._locals = Object.create(null);
         this._tmp_env = Object.create(null);
+        this._functions = Object.create(null);
         this._pipe = this._export = this._tmp = false;
         this._args = [];
         this._name = '/bin/bash';
@@ -316,6 +321,12 @@ export class Bash implements BashInterpreter, Process {
         // we need to inherit the state of parent bash
         // we set interal env using public read only getter
         bash._globals = this.env;
+        // the child sees what the parent defined, but a definition of its own
+        // stays its own - the table is inherited rather than shared, the way
+        // `env` above is a copy and not the parent's object. Chaining also keeps
+        // the null prototype: a flat `{...}` copy would answer to `toString` and
+        // every other name on Object.prototype as if it were a function
+        bash._functions = Object.create(this._functions);
         bash.cwd = this.cwd;
         return bash;
     }
@@ -678,6 +689,20 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     public async exec(command: string, ...args: string[]): Promise<number> {
+        if (this._functions[command]) {
+            const body = this._functions[command];
+            const _args = this._args;
+            this._args = args;
+            try {
+                return await this.dispatch(body);
+            } finally {
+                this._args = _args;
+            }
+        }
+        const builtin = ('builtin_' + command) as keyof BashInterpreter;
+        if (typeof this[builtin] === 'function') {
+            return this[builtin](args);
+        }
         if (this.command_exists(command)) {
             const fn = this._commands[command];
             const code = await fn.apply(this._context, args);
@@ -1181,11 +1206,32 @@ export class Bash implements BashInterpreter, Process {
     }
 
     // -------------------------------------------------------------------------
-    protected async builtin_exit(args: string[]) {
+    private exit_code(args: string[]) {
         const code = args.length === 1 ?
             parseInt(args[0], 10) :
             parseInt(this.get_variable('?') as string, 10) || 0;
+        return code;
+    }
+
+    // -------------------------------------------------------------------------
+    protected builtin_exit(args: string[]) {
+        const code = this.exit_code(args);
         throw new Exit(code);
+    }
+
+    // -------------------------------------------------------------------------
+    protected builtin_return(args: string[]) {
+        const code = this.exit_code(args);
+        throw new Return(code);
+    }
+
+    // -------------------------------------------------------------------------
+    protected builtin_shift() {
+        if (this._args.length) {
+            this._args.shift();
+            return 0;
+        }
+        return 1;
     }
 
     // -------------------------------------------------------------------------
@@ -1256,13 +1302,6 @@ export class Bash implements BashInterpreter, Process {
             args.pop();
             command = 'test';
         }
-        const builtin = ('builtin_' + command) as keyof BashInterpreter;
-        // builtins run outside the try on purpose: `exit` unwinds the script by
-        // raising, and catching it here would turn it into an ordinary status
-        // and let the script carry on
-        if (typeof this[builtin] === 'function') {
-            return this[builtin](args);
-        }
         const [input_redir, output_redir] = this.split_redirects(ast);
         const { stdout, stderr } = this._context;
         // only the stream a redirect names is swapped out - `>` must not
@@ -1291,6 +1330,15 @@ export class Bash implements BashInterpreter, Process {
                 code = await this.exec(command, ...args);
             }
         } catch(e) {
+            // a function body runs through exec(), so `exit` inside one raises
+            // in here - it has to unwind the shell the way the builtin does
+            // instead of becoming a status, or the script would carry on. The
+            // finally below still runs, which is what bash does too: a redirect
+            // on the call is written with whatever the body printed before it
+            // exited
+            if (e instanceof Exit || e instanceof Return) {
+                throw e;
+            }
             // process was killed
             if (e instanceof Signal) {
                 code = e.code;
@@ -1373,6 +1421,11 @@ export class Bash implements BashInterpreter, Process {
         const bash = this.fork();
         try {
             return await bash.dispatch(ast.body);
+        } catch(e) {
+            // don't propage exit to parent shell
+            if (e instanceof Exit) {
+                return e.code;
+            }
         } finally {
             this.remove_process(bash.pid);
         }
@@ -1380,11 +1433,18 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     protected async CompoundList(ast: CompoundList) {
-        let code;
-        for (const statement of ast.commands) {
-            code = await this.dispatch(statement);
+        try {
+            let code;
+            for (const statement of ast.commands) {
+                code = await this.dispatch(statement);
+            }
+            return code;
+        } catch (e) {
+            if (e instanceof Return) {
+                return e.code;
+            }
+            throw e;
         }
-        return code;
     }
 
     // -------------------------------------------------------------------------
@@ -1424,6 +1484,7 @@ export class Bash implements BashInterpreter, Process {
         return result;
     }
 
+    // -------------------------------------------------------------------------
     protected async Function(ast: Function) {
         if (ast.name.parts) {
             throw new Error(`bash: \`${ast.name.text}': not a valid identifier`);
@@ -1431,8 +1492,7 @@ export class Bash implements BashInterpreter, Process {
         if (ast.body.type !== 'BraceGroup') {
             throw new Error(`bash: syntax error for function \`${ast.name.text}'`);
         }
-        const body = ast.body.body;
-        console.log(body);
+        this._functions[ast.name.value] = ast.body.body;
     }
 
     // -------------------------------------------------------------------------

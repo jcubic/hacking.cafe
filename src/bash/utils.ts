@@ -366,6 +366,20 @@ export class Exit extends Error {
 }
 
 // -----------------------------------------------------------------------------
+// raised by the `return` builtin to unwind out of the running script. It is not a
+// -----------------------------------------------------------------------------
+export class Return extends Error {
+    private _code: number;
+    constructor(code: number) {
+        super(`return ${code}`);
+        this._code = code;
+    }
+    get code() {
+        return this._code;
+    }
+}
+
+// -----------------------------------------------------------------------------
 // the prelude's exit report, told apart from mitty's JSON strings on the pipe
 // the two of them share
 // -----------------------------------------------------------------------------

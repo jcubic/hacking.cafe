@@ -394,6 +394,330 @@ describe('case', () => {
     });
 });
 
+describe('functions', () => {
+    it('runs the body when the name is called', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('greet() { echo hello; }\ngreet')).toBe('hello\n');
+        cleanup();
+    });
+
+    it('runs every command of the body', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo one; echo two; }\nf')).toBe('one\ntwo\n');
+        cleanup();
+    });
+
+    it('accepts the function keyword', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('function greet { echo hello; }\ngreet')).toBe('hello\n');
+        cleanup();
+    });
+
+    it('accepts the function keyword together with parentheses', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('function greet() { echo hello; }\ngreet')).toBe('hello\n');
+        cleanup();
+    });
+
+    // defining a function only records the body - nothing of it runs until the
+    // name is called, and the definition itself always succeeds
+    it('does not run the body on definition', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo hi; }\necho $?')).toBe('0\n');
+        cleanup();
+    });
+
+    it('a later definition replaces the earlier one', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo one; }\nf() { echo two; }\nf')).toBe('two\n');
+        cleanup();
+    });
+
+    it('takes the exit code of the last command of the body', async () => {
+        const { run, cleanup } = await create_bash();
+        await run('ok() { false; true; }\nbad() { true; false; }');
+        expect(await run('ok')).toBe(0);
+        expect(await run('bad')).toBe(1);
+        cleanup();
+    });
+
+    it('reports a body that could not run', async () => {
+        const { run, stderr, cleanup } = await create_bash();
+        expect(await run('f() { nosuchcommand; }\nf')).toBe(1);
+        expect(stderr.text).toMatch(/nosuchcommand: Command not found/);
+        cleanup();
+    });
+
+    it('calls another function', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'a() { echo A; }\nb() { a; echo B; }\nb';
+        expect(await output(code)).toBe('A\nB\n');
+        cleanup();
+    });
+
+    it('can be defined inside a compound command', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'if true; then f() { echo hi; }; fi\nf';
+        expect(await output(code)).toBe('hi\n');
+        cleanup();
+    });
+
+    // the inner definition is recorded when the outer body runs, not when it is
+    // parsed, so the name only resolves after the first call to the outer one
+    it('records a nested definition once the outer function runs', async () => {
+        const { output, run, stderr, cleanup } = await create_bash();
+        await run('outer() { inner() { echo in; }; }');
+        expect(await run('inner')).toBe(1);
+        expect(stderr.text).toMatch(/inner: Command not found/);
+        expect(await output('outer\ninner')).toBe('in\n');
+        cleanup();
+    });
+
+    it('is usable as the clause of a compound command', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'ok() { true; }\nbad() { false; }\n' +
+            'if ok; then echo yes; fi\nbad || echo no\nok && echo and';
+        expect(await output(code)).toBe('yes\nno\nand\n');
+        cleanup();
+    });
+
+    it('honours a redirect inside the body', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'f() { echo inner > out.txt; }\nf\ncat out.txt';
+        expect(await output(code)).toBe('inner\n');
+        cleanup();
+    });
+
+    // there is no `local`, and bash without it behaves the same way: the body
+    // assigns in the shell that called it
+    it('assigns variables in the calling shell', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('f() { NAME=inner; }\nf');
+        expect(bash.get_variable('NAME')).toBe('inner');
+        cleanup();
+    });
+
+    it('unwinds the shell when the body exits', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('f() { exit 7; }\nf')).rejects.toBeInstanceOf(Exit);
+        await expect(run('f() { exit 7; }\nf')).rejects.toHaveProperty('code', 7);
+        cleanup();
+    });
+
+    it('rejects a name that is not an identifier', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('$x() { echo hi; }'))
+            .rejects.toThrow("bash: `$x': not a valid identifier");
+        cleanup();
+    });
+
+    it('rejects a body that is not a brace group', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('f() ( echo hi )'))
+            .rejects.toThrow("bash: syntax error for function `f'");
+        cleanup();
+    });
+
+    it('is private to the shell it was defined in', async () => {
+        const { run, stderr, cleanup } = await create_bash();
+        const other = await create_bash();
+        await run('f() { echo hi; }');
+        expect(await other.run('f')).toBe(1);
+        expect(other.stderr.text).toMatch(/f: Command not found/);
+        expect(stderr.text).toBe('');
+        other.cleanup();
+        cleanup();
+    });
+
+    // a function shadows a command of the same name, the way bash resolves a
+    // name against functions before anything on PATH
+    it('shadows a command on PATH', async () => {
+        const { output, cleanup } = await create_bash({
+            fixture: { '/bin/hi': { content: 'echo from-path\n', mode: 0o755 } }
+        });
+        expect(await output('export PATH=/bin\nhi')).toBe('from-path\n');
+        expect(await output('hi() { echo from-function; }\nhi')).toBe('from-function\n');
+        cleanup();
+    });
+});
+
+describe('function arguments', () => {
+    it('passes the call arguments as positional parameters', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo "$1 $2"; }\nf one two')).toBe('one two\n');
+        cleanup();
+    });
+
+    it('counts them in $#', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo $#; }\nf a b c')).toBe('3\n');
+        expect(await output('f')).toBe('0\n');
+        cleanup();
+    });
+
+    it('joins them in $* and $@', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo "$*"; }\nf a b c')).toBe('a b c\n');
+        expect(await output('g() { echo $@; }\ng a b c')).toBe('a b c\n');
+        cleanup();
+    });
+
+    it('reaches past the ninth with braces', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'f() { echo "${10}"; }\nf 1 2 3 4 5 6 7 8 9 ten';
+        expect(await output(code)).toBe('ten\n');
+        cleanup();
+    });
+
+    it('expands the arguments before the call', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo "[$1]"; }\nX=val\nf $X')).toBe('[val]\n');
+        cleanup();
+    });
+
+    it('leaves them unset when called without arguments', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo "[$1]"; }\nf')).toBe('[]\n');
+        cleanup();
+    });
+
+    // the shell's own parameters are the script's, and a call must not be able
+    // to overwrite them for whatever runs after it
+    it('restores the parameters of the caller', async () => {
+        const { output, cleanup } = await create_bash({
+            fixture: {
+                '/bin/script': {
+                    content: 'f() { echo in=$1 n=$#; }\nf inner\necho out=$1 n=$#\n',
+                    mode: 0o755
+                }
+            }
+        });
+        expect(await output('export PATH=/bin\nscript outer')).toBe(
+            'in=inner n=1\nout=outer n=1\n'
+        );
+        cleanup();
+    });
+
+    it('restores them around a nested call', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'a() { echo a1=$1; }\nb() { a inner; echo b1=$1; }\nb outer';
+        expect(await output(code)).toBe('a1=inner\nb1=outer\n');
+        cleanup();
+    });
+
+    it('keeps $0 as the name of the shell', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo $0; }\nf arg')).toBe('bash\n');
+        cleanup();
+    });
+});
+
+// -----------------------------------------------------------------------------
+// a function is called through exec(), which puts it where every other command
+// already sits: inside the redirect handling, and in a shell that fork() hands
+// the function table to
+// -----------------------------------------------------------------------------
+describe('functions in a forked shell', () => {
+    it('is visible inside a subshell', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo hi; }\n( f )')).toBe('hi\n');
+        cleanup();
+    });
+
+    it('is visible inside a pipeline', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo hi; }\nf | cat')).toBe('hi\n');
+        expect(await output('g() { cat; }\necho hi | g')).toBe('hi\n');
+        cleanup();
+    });
+
+    it('is visible inside a command substitution', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { echo hi; }\necho "[$(f)]"')).toBe('[hi]\n');
+        cleanup();
+    });
+
+    // a definition belongs to the forked shell, the way a variable does - the
+    // parent is left with the body it had
+    it('a definition in a subshell does not reach the parent', async () => {
+        const { output, run, stderr, cleanup } = await create_bash();
+        await run('( f() { echo inner; } )');
+        expect(await run('f')).toBe(1);
+        expect(stderr.text).toMatch(/f: Command not found/);
+        expect(await output('f() { echo outer; }\n( f() { echo inner; } )\nf'))
+            .toBe('outer\n');
+        cleanup();
+    });
+
+    // exit inside a function only unwinds the shell the body runs in, so a
+    // subshell should take the status and let the script carry on. Subshell()
+    // does not catch Exit, so it unwinds the parent too - nothing to do with
+    // functions, a bare `( exit 7 )` behaves the same way
+    it('an exit in the body stays inside the subshell', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { exit 7; }\n( f )\necho after=$?')).toBe('after=7\n');
+        cleanup();
+    });
+});
+
+describe('function call redirects', () => {
+    it('writes stdout of the body to a file', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'f() { echo out; }\nf > out.txt\ncat out.txt';
+        expect(await output(code)).toBe('out\n');
+        cleanup();
+    });
+
+    it('redirects stderr of the body with 2>', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'f() { nosuchcommand; }\nf 2> err.txt\ncat err.txt';
+        expect(await output(code)).toMatch(/nosuchcommand: Command not found/);
+        cleanup();
+    });
+
+    it('feeds the body stdin from a file with <', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'echo data > in.txt\nf() { cat; }\nf < in.txt';
+        expect(await output(code)).toBe('data\n');
+        cleanup();
+    });
+
+    // the redirect is written on the way out, so what the body printed before
+    // it exited still reaches the file
+    it('writes the file even when the body exits', async () => {
+        const { bash, fs, cleanup } = await create_bash();
+        await expect(bash.evaluate('f() { echo hi; exit 7; }\nf > out.txt'))
+            .rejects.toHaveProperty('code', 7);
+        expect(await fs.readFile('/home/guest/out.txt', 'utf8')).toBe('hi\n');
+        cleanup();
+    });
+});
+
+// -----------------------------------------------------------------------------
+// What functions cannot do yet. These are the behaviours bash has, written out
+// so the fix has something to turn green - they are skipped, not missing, on
+// purpose: each one is a gap in the current implementation, not a wrong
+// expectation.
+// -----------------------------------------------------------------------------
+describe('functions (exit shift)', () => {
+    // there is no `return` builtin, so the body always runs to the end and the
+    // name resolves as an ordinary command that is not found
+    it('return leaves the body early with a status', async () => {
+        const { run, output, cleanup } = await create_bash();
+        expect(await output('f() { echo a; return; echo b; }\nf')).toBe('a\n');
+        expect(await run('g() { return 3; }\ng')).toBe(3);
+        cleanup();
+    });
+
+    // there is no `shift` builtin either, and walking the arguments of a
+    // function is most of what it is for
+    it('shift drops the first positional parameter', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('f() { shift; echo "$1 $#"; }\nf a b')).toBe('b 1\n');
+        cleanup();
+    });
+});
+
 describe('prefix assignments', () => {
     it('passes a variable to one command only', async () => {
         const { bash, run, cleanup } = await create_bash();
