@@ -54,7 +54,15 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] run in background `&`
 - [ ] process substitution `<(command)` and `>(command)`
 - [ ] extract commands like `cat` or `grep` into scripts in `/bin`
-- [ ] glob patterns
+- [x] glob patterns
+  - [x] arrays
+  - [x] for loop
+  - [x] command arguments
+  - [x] sort the matches
+  - [ ] skip dotfiles unless the pattern starts with a dot
+  - [ ] single quotes around a pattern
+  - [ ] `*/` to match directories only
+  - [x] patterns with `~` or a variable in them
 - [x] `test` command
 - [ ] aliases
 - [x] functions

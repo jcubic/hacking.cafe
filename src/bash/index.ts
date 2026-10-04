@@ -24,6 +24,7 @@ import path from 'path-browserify';
 import parse_options from '@jcubic/lily';
 import { Host } from '@jcubic/mitty';
 import type { Channel } from '@jcubic/mitty';
+import { Glob } from 'isomorphic-glob';
 
 import type {
     If,
@@ -293,6 +294,39 @@ export class Bash implements BashInterpreter, Process {
     }
     set cwd(dir: string) {
         this._context.cwd = dir;
+    }
+
+    // -------------------------------------------------------------------------
+    private is_glob(arg: Word, resolved_pattern: string) {
+        if (arg.text.match(/^(["']).*\1$/)) {
+            return false;
+        }
+        // variables including assignment
+        if (resolved_pattern.match(/(^|=)\$/)) {
+            return false;
+        }
+        const re = /(?:^|[^\\])(?:\*|\?|\[.+?\])/;
+        if (!arg.text.match(re) && arg.value.match(re)) {
+            // escaped pattern
+            return false;
+        }
+        return resolved_pattern.match(re);
+    }
+
+    // -------------------------------------------------------------------------
+    private async expand_glob(pattern: string) {
+        try {
+            const glob = new Glob({ fs: this.fs, cwd: this.cwd });
+            const result = await glob.expand(pattern.replace(/~/, this.cwd));
+            if (!result.length) {
+                // Bash return pattern verbatim when no files found
+                return [pattern];
+            }
+            result.sort();
+            return result;
+        } catch(e) {
+            return [pattern];
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -696,6 +730,14 @@ export class Bash implements BashInterpreter, Process {
             this._args = args;
             try {
                 return await this.dispatch(body);
+            } catch(e) {
+                // the call is the boundary `return` unwinds to - it has to be
+                // caught here and nowhere deeper, or it would only leave the
+                // block it was written in instead of the whole function
+                if (e instanceof Return) {
+                    return e.code;
+                }
+                throw e;
             } finally {
                 this._args = _args;
             }
@@ -786,7 +828,18 @@ export class Bash implements BashInterpreter, Process {
                 const err = ast.errors[0];
                 throw new Error(`${err.message} at ${err.pos}`);
             }
-            return this.dispatch(ast);
+            try {
+                return await this.dispatch(ast);
+            } catch(e) {
+                // `source` runs the file through here, and a `return` in a
+                // sourced file returns from the file - the same boundary serves
+                // a stray `return` outside any function, which bash complains
+                // about but which must not escape as an exception either way
+                if (e instanceof Return) {
+                    return e.code;
+                }
+                throw e;
+            }
         }
         return 0;
     }
@@ -941,6 +994,10 @@ export class Bash implements BashInterpreter, Process {
                     this.remove_process(bash.pid);
                 }
             case 'ArithmeticExpansion':
+                break;
+            case 'BraceExpansion':
+                // handled by glob expansion
+                return ast.text;
         }
         throw new Error(`Unkown Bash expression ${ast.text}`);
     }
@@ -1122,7 +1179,12 @@ export class Bash implements BashInterpreter, Process {
     protected async words(ast: Word[]) {
         const args = [];
         for (const arg of ast) {
-            args.push(await this.resolve(arg));
+            let value = await this.resolve(arg);
+            if (this.is_glob(arg, value)) {
+                args.push(...await this.expand_glob(value));
+            } else {
+                args.push(value);
+            }
         }
         return args;
     }
@@ -1434,18 +1496,11 @@ export class Bash implements BashInterpreter, Process {
 
     // -------------------------------------------------------------------------
     protected async CompoundList(ast: CompoundList) {
-        try {
-            let code;
-            for (const statement of ast.commands) {
-                code = await this.dispatch(statement);
-            }
-            return code;
-        } catch (e) {
-            if (e instanceof Return) {
-                return e.code;
-            }
-            throw e;
+        let code;
+        for (const statement of ast.commands) {
+            code = await this.dispatch(statement);
         }
+        return code;
     }
 
     // -------------------------------------------------------------------------
@@ -1492,8 +1547,9 @@ export class Bash implements BashInterpreter, Process {
         }
         const variable = ast.name.value;
         let result;
-        for (let i = 0; i < ast.wordlist.length; ++i) {
-            this.set_variable(variable, await this.resolve(ast.wordlist[i]));
+        const items = await this.words(ast.wordlist);
+        for (const item of items) {
+            this.set_variable(variable, item);
             result = await this.dispatch(ast.body);
         }
         return result;

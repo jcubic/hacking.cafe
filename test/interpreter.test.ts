@@ -371,6 +371,105 @@ describe('while and until', () => {
     });
 });
 
+describe('for', () => {
+    it('runs the body once per word', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'for f in a b c; do echo "[$f]"; done';
+        expect(await output(code)).toBe('[a]\n[b]\n[c]\n');
+        cleanup();
+    });
+
+    it('never runs the body for an empty word list', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('for f in; do echo never; done\necho code=$?')).toBe('code=0\n');
+        cleanup();
+    });
+
+    it('takes the exit code of the last command of the body', async () => {
+        const { run, cleanup } = await create_bash();
+        expect(await run('for f in a b; do true; done')).toBe(0);
+        expect(await run('for f in a b; do false; done')).toBe(1);
+        cleanup();
+    });
+
+    // an empty list means the body never ran, and bash reports success for that
+    it('reports success when there was nothing to iterate', async () => {
+        const { run, cleanup } = await create_bash();
+        expect(await run('for f in; do false; done')).toBe(0);
+        cleanup();
+    });
+
+    it('leaves the variable set to the last word', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('for f in a b c; do :; done');
+        expect(bash.get_variable('f')).toBe('c');
+        cleanup();
+    });
+
+    it('keeps a quoted word whole', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'for f in "a b" c; do echo "[$f]"; done';
+        expect(await output(code)).toBe('[a b]\n[c]\n');
+        cleanup();
+    });
+
+    it('expands a variable in the word list', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'X=val\nfor f in $X end; do echo "[$f]"; done';
+        expect(await output(code)).toBe('[val]\n[end]\n');
+        cleanup();
+    });
+
+    it('nests', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'for a in 1 2; do for b in x y; do echo $a$b; done; done';
+        expect(await output(code)).toBe('1x\n1y\n2x\n2y\n');
+        cleanup();
+    });
+
+    // the inner loop assigns the same name, so the outer one reads the value the
+    // inner left behind - bash has one scope here too
+    it('shares the variable with a nested loop of the same name', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'for a in 1 2; do for a in x; do :; done; echo $a; done';
+        expect(await output(code)).toBe('x\nx\n');
+        cleanup();
+    });
+
+    it('rejects a name that is not an identifier', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('for $x in a; do echo hi; done'))
+            .rejects.toThrow("bash: `$x': not a valid identifier");
+        cleanup();
+    });
+
+    it('runs an if inside the body', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'for f in a b; do if [ $f = a ]; then echo first; else echo rest; fi; done';
+        expect(await output(code)).toBe('first\nrest\n');
+        cleanup();
+    });
+
+    it('returns out of the function it is in', async () => {
+        const { output, cleanup } = await create_bash();
+        const code = 'f() { for x in a b; do return 5; done; echo never; }\nf\necho code=$?';
+        expect(await output(code)).toBe('code=5\n');
+        cleanup();
+    });
+
+    it('unwinds the shell when the body exits', async () => {
+        const { run, cleanup } = await create_bash();
+        await expect(run('for x in a b; do exit 4; done')).rejects.toHaveProperty('code', 4);
+        cleanup();
+    });
+
+    it('feeds a pipeline', async () => {
+        const { output, cleanup } = await create_bash();
+        expect(await output('for f in a b; do echo $f; done | cat')).toBe('a\nb\n');
+        cleanup();
+    });
+});
+
 describe('case', () => {
     it('runs the matching branch', async () => {
         const { output, cleanup } = await create_bash();
@@ -544,6 +643,40 @@ describe('functions', () => {
         const { run, output, cleanup } = await create_bash();
         expect(await output('f() { echo a; return; echo b; }\nf')).toBe('a\n');
         expect(await run('g() { return 3; }\ng')).toBe(3);
+        cleanup();
+    });
+
+    it('return with no argument takes the status of the last command', async () => {
+        const { run, cleanup } = await create_bash();
+        expect(await run('f() { false; return; }\nf')).toBe(1);
+        expect(await run('g() { true; return; }\ng')).toBe(0);
+        cleanup();
+    });
+
+    // `return` unwinds to the call, not to the block it was written in - the
+    // whole body is left behind however deeply the statement was nested
+    it('return leaves the body from inside a compound command', async () => {
+        const { run, output, cleanup } = await create_bash();
+        const blocks = [
+            'if true; then return 5; fi',
+            'for x in a b; do return 5; done',
+            'while true; do return 5; done',
+            'case a in a) return 5 ;; esac',
+            'for a in 1; do for b in x; do return 5; done; done'
+        ];
+        for (const block of blocks) {
+            expect(await output(`f() { ${block}; echo never; }\nf`)).toBe('');
+            expect(await run(`f() { ${block}; echo never; }\nf`)).toBe(5);
+        }
+        cleanup();
+    });
+
+    // only the function that ran `return` is left - the caller carries on
+    it('return only leaves the function that ran it', async () => {
+        const { output, run, cleanup } = await create_bash();
+        const code = 'g() { return 5; }\nf() { g; echo after; }\nf';
+        expect(await output(code)).toBe('after\n');
+        expect(await run(code)).toBe(0);
         cleanup();
     });
 
