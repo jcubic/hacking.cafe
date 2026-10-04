@@ -74,7 +74,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 - [x] `&&`/`||`
 - [x] `pushd`/`popd`
 - [x] `while`, `until`
-- [ ] `for`
+- [x] `for`
 - [x] `while read line`
 - [x] `case`/`esac`
 - [x] `$0`-`$9`

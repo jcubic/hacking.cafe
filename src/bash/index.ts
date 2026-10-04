@@ -27,6 +27,7 @@ import type { Channel } from '@jcubic/mitty';
 
 import type {
     If,
+    For,
     Node,
     Word,
     Case,
@@ -1480,6 +1481,20 @@ export class Bash implements BashInterpreter, Process {
                     }
                 }
             }
+        }
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    protected async For(ast: For) {
+        if (ast.name.parts) {
+            throw new Error(`bash: \`${ast.name.text}': not a valid identifier`);
+        }
+        const variable = ast.name.value;
+        let result;
+        for (let i = 0; i < ast.wordlist.length; ++i) {
+            this.set_variable(variable, await this.resolve(ast.wordlist[i]));
+            result = await this.dispatch(ast.body);
         }
         return result;
     }
