@@ -136,51 +136,32 @@ describe('glob expansion', () => {
         const code = 'for f in *.zip; do echo "[$f]"; done';
         expect(await text(code)).toBe('[*.zip]\n');
     });
-});
 
-// -----------------------------------------------------------------------------
-// What glob cannot do yet. These are the behaviours bash has, written out so the
-// fix has something to turn green - skipped, not missing, on purpose. Each one
-// was checked against real bash.
-// -----------------------------------------------------------------------------
-describe('glob expansion (not implemented yet)', () => {
-    // expand() hands back whatever order readdir produced; bash sorts the
-    // matches of every pattern before the command sees them
     it('sorts the matches', async () => {
         expect(await text('echo *.txt')).toBe('a.txt b.txt\n');
         expect(await text('L=(*.txt)\necho ${L[0]}')).toBe('a.txt\n');
         expect(await text('for f in *.txt; do echo $f; done')).toBe('a.txt\nb.txt\n');
     });
 
-    // a leading dot has to be matched explicitly in bash, so `*` skips .bashrc
-    // and .hidden. Here they come back with everything else
-    it.fails('skips a dotfile unless the pattern starts with a dot', async () => {
+    it('skips a dotfile unless the pattern starts with a dot', async () => {
         expect(await matches('echo *'))
             .toEqual(['a.txt', 'b.txt', 'dir', 'notes.md', 'one.js', 'sub', 'two.js']);
     });
 
-    // is_glob() only strips a double quoted word, so a single quoted pattern is
-    // treated as a glob, fails to match and is handed back with its own quotes
-    // still in it - `echo '*.txt'` prints `'*.txt'` instead of `*.txt`
     it('is left alone inside single quotes', async () => {
         expect(await text("echo '*.txt'")).toBe('*.txt\n');
         expect(await text("echo '*.zip'")).toBe('*.zip\n');
     });
 
-    // a trailing slash restricts the matches to directories
-    it.fails('matches only directories with a trailing slash', async () => {
+    it('matches only directories with a trailing slash', async () => {
         expect(await matches('echo */')).toEqual(['dir/', 'sub/']);
     });
 
-    // a word that is a glob never reaches resolve(), so the ~ in front of it is
-    // not expanded and the pattern cannot match anything
     it('expands a tilde in front of a pattern', async () => {
         expect(await matches('echo ~/*.txt'))
             .toEqual(['/home/guest/a.txt', '/home/guest/b.txt']);
     });
 
-    // is_glob() gives up on any word containing `$`, so the pattern is resolved
-    // but never expanded: `echo $D/*.txt` prints `sub/*.txt`
     it('expands a pattern built from a variable', async () => {
         expect(await text('D=sub\necho $D/*.txt')).toBe('sub/deep.txt\n');
         expect(await matches('V="*.txt"\necho $V')).toEqual(['a.txt', 'b.txt']);

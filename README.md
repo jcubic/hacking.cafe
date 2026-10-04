@@ -59,10 +59,10 @@ The aim is to create a persistent Unix-like system in the browser. With the help
   - [x] for loop
   - [x] command arguments
   - [x] sort the matches
-  - [ ] skip dotfiles unless the pattern starts with a dot
-  - [ ] single quotes around a pattern
-  - [ ] `*/` to match directories only
+  - [x] single quotes around a pattern
   - [x] patterns with `~` or a variable in them
+  - [ ] skip dotfiles unless the pattern starts with a dot
+  - [ ] `*/` to match directories only
 - [x] `test` command
 - [ ] aliases
 - [x] functions
