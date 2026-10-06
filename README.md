@@ -18,7 +18,7 @@ The aim is to create a persistent Unix-like system in the browser. With the help
 
 - [x] `~/.bashrc` and `/etc/bashrc` files
 - [x] `$PS1` variable
-  - [ ] functions in prompt (backticks)
+  - [x] expressions in prompt (backticks)
 - [x] `$PATH` variable
 - [x] `$IFS` variable
 - [x] `$?` variable

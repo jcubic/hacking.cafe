@@ -48,7 +48,7 @@ describe('prompt', () => {
 
     it('uses the default PS1', async () => {
         const { bash, cleanup } = await create_bash();
-        expect(bash.prompt()).toBe(`bash-${version}$ `);
+        expect(await bash.prompt()).toBe(`bash-${version}$ `);
         cleanup();
     });
 
@@ -61,13 +61,13 @@ describe('prompt', () => {
     it('expands the working directory', async () => {
         const shell = await create_bash({ fixture: { '/home/guest/src/': '' } });
         await shell.run('PS1="\\w"');
-        expect(shell.bash.prompt()).toBe('~');
+        expect(await shell.bash.prompt()).toBe('~');
         await shell.run('cd src');
-        expect(shell.bash.prompt()).toBe('~/src');
+        expect(await shell.bash.prompt()).toBe('~/src');
         await shell.run('PS1="\\W"');
-        expect(shell.bash.prompt()).toBe('src');
+        expect(await shell.bash.prompt()).toBe('src');
         await shell.run('cd ~');
-        expect(shell.bash.prompt()).toBe('~');
+        expect(await shell.bash.prompt()).toBe('~');
         shell.cleanup();
     });
 
@@ -89,6 +89,103 @@ describe('prompt', () => {
 
     it('leaves an unknown escape as the letter', async () => {
         expect(await prompt('\\j')).toBe('j');
+    });
+});
+
+describe('prompt expressions', () => {
+    // the backticks are escaped in the assignment on purpose: unescaped, double
+    // quotes would substitute them once, when PS1 is set. Escaped, the
+    // expression is what PS1 holds and the prompt is what runs it
+    it('runs a backtick expression', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo hello\\`]"');
+        expect(await bash.prompt()).toBe('[hello]');
+        cleanup();
+    });
+
+    it('keeps the expression in PS1 instead of its output', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo hello\\`]"');
+        expect(bash.get_variable('PS1')).toBe('[`echo hello`]');
+        cleanup();
+    });
+
+    it('runs the expression on every call, not once', async () => {
+        const { bash, fs, run, cleanup } = await create_bash();
+        await run('PS1="[\\`cat n.txt\\`]"');
+        await fs.writeFile('/home/guest/n.txt', 'one');
+        expect(await bash.prompt()).toBe('[one]');
+        await fs.writeFile('/home/guest/n.txt', 'two');
+        expect(await bash.prompt()).toBe('[two]');
+        cleanup();
+    });
+
+    it('runs every expression of the prompt', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo one\\`][\\`echo two\\`]"');
+        expect(await bash.prompt()).toBe('[one][two]');
+        cleanup();
+    });
+
+    it('combines an expression with the escapes around it', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="(\\u@\\h)-[\\[\\w\\]]\\`echo hello\\`"');
+        expect(await bash.prompt()).toBe('(guest@hacking.cafe)-[~]hello');
+        cleanup();
+    });
+
+    it('strips the trailing newline of the output but keeps the inner ones', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo a; echo b\\`]"');
+        expect(await bash.prompt()).toBe('[a\nb]');
+        cleanup();
+    });
+
+    it('expands an expression that prints nothing to nothing', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`true\\`]"');
+        expect(await bash.prompt()).toBe('[]');
+        cleanup();
+    });
+
+    it('leaves a prompt without an expression alone', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="plain$ "');
+        expect(await bash.prompt()).toBe('plain$ ');
+        cleanup();
+    });
+
+    // the expression runs in a forked shell, so drawing the prompt cannot
+    // change the shell the user is typing into
+    it('does not let the expression touch the shell', async () => {
+        const { bash, run, cleanup } = await create_bash({ fixture: { '/tmp/': '' } });
+        await run('NAME=mine');
+        await run('PS1="[\\`NAME=theirs; cd /tmp; echo x\\`]"');
+        expect(await bash.prompt()).toBe('[x]');
+        expect(bash.get_variable('NAME')).toBe('mine');
+        expect(bash.cwd).toBe('/home/guest');
+        cleanup();
+    });
+
+    it('leaves no process behind', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo hello\\`]"');
+        const before = bash.procs.length;
+        await bash.prompt();
+        await bash.prompt();
+        expect(bash.procs).toHaveLength(before);
+        cleanup();
+    });
+
+    // jQuery Terminal redraws the prompt from a dozen places, so calls overlap.
+    // Nothing of the expansion may live in shell state, or one call would wipe
+    // what another is about to read and the prompt would render without it
+    it('is safe to call while another call is still running', async () => {
+        const { bash, run, cleanup } = await create_bash();
+        await run('PS1="[\\`echo hello\\`]"');
+        const calls = await Promise.all(Array.from({ length: 5 }, () => bash.prompt()));
+        expect(calls).toEqual(Array(5).fill('[hello]'));
+        cleanup();
     });
 });
 

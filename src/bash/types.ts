@@ -111,7 +111,7 @@ export interface BashInterpreter {
     // resolve path using $CWD and $PATH
     resolve_path(path: string): string;
     // read and intepret bash prompt from PS1
-    prompt(string: string): string;
+    prompt(string: string): Promise<string>;
     // evaluate bash code
     evaluate(code: string): TypeOrPromise<number>;
     command_exists(command: any): command is keyof Commands;

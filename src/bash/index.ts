@@ -595,9 +595,10 @@ export class Bash implements BashInterpreter, Process {
     // PS1="\u@\h:\w\$ "
     // PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
     // -------------------------------------------------------------------------
-    prompt() {
+    async prompt() {
         const prompt = this.get_variable('PS1') as string;
-        return prompt.replace(/\\([dhHjlstT@uvVwW!$#nrea\\\[\]]|[0-7]{3})/g, (_, seq) => {
+        const re = /\\([dhHjlstT@uvVwW!$#nrea\\\[\]]|[0-7]{3})/g;
+        let result = prompt.replace(re, (_, seq) => {
             if (seq.match(/^[0-7]+$/)) {
                 return char(parseInt(seq, 8));
             }
@@ -633,6 +634,40 @@ export class Bash implements BashInterpreter, Process {
             }
             return seq;
         });
+        // process the `expression`s in the prompt. String::replace can't be
+        // asynchronous, so they are parked behind markers, run, and then put
+        // back in a second pass
+        const expressions: Record<string, string> = {};
+        let index = 0;
+        result = result.replace(/`((?:[^`\\]|\\(?:\\\\)*`|\\\\)*)`/g, (_, code) => {
+            const marker = `\u0000${index++}\u0000`;
+            expressions[marker] = code;
+            return marker;
+        });
+        if (!index) {
+            return result;
+        }
+        for (const [marker, code] of Object.entries(expressions)) {
+            expressions[marker] = await this.substitute(code);
+        }
+        return result.replace(/\u0000[0-9]+\u0000/g, (marker) => {
+            return expressions[marker] ?? '';
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // command substitution helper for usage in the prompt method
+    // -------------------------------------------------------------------------
+    protected async substitute(code: string): Promise<string> {
+        const bash = this.fork();
+        try {
+            const buffer = new SilientOutput();
+            bash._context.stdout = buffer;
+            await bash.evaluate(code);
+            return buffer.output().replace(/\n+$/, '');
+        } finally {
+            this.remove_process(bash.pid);
+        }
     }
 
     // -------------------------------------------------------------------------
