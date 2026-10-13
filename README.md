@@ -172,6 +172,11 @@ Hacking Cafe will only expand aliases as commands.
 * An error a JavaScript program catches from `require()` arrives with its `name`, `message` and
 the main thread's `stack`, but not custom properties — `e.code` is undefined, so match on the
 message to tell `ENOENT` from a real failure.
+* There is no fire-and-forget on anything `require()` returns. A call is sent to the main thread
+only when it is awaited, so `stdout.write('hi')` without `await` does nothing at all, silently.
+Synchronous code that has to reach the main thread (a language runtime embedded in an
+executable, say) must queue its calls and await the queue before the program returns — see
+`api/fs/bin/python`.
 
 ## Commercial License
 

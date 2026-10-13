@@ -15,16 +15,38 @@ const io = {
     stderr
 };
 
+// Brython calls the three bridge functions below synchronously - sys.stdout
+// cannot await. A mitty chain is only sent to the main thread when something
+// awaits it, so calling io[type].write() and dropping the result would send
+// nothing at all. Every call is queued instead, and drain() awaits the queue:
+// that is what dispatches the calls, and chaining them keeps them in the order
+// Python made them.
+let queue = Promise.resolve();
+
+// a call that fails must not hold back the ones behind it, hence the same
+// handler on both paths
+function enqueue(fn) {
+    queue = queue.then(fn, fn);
+}
+
+async function drain() {
+    try {
+        await queue;
+    } catch(e) {
+        // output that cannot reach the terminal has nowhere left to be reported
+    }
+}
+
 self.write = function(type, data) {
-    io[type].write(data);
+    enqueue(() => io[type].write(data));
 };
 
 self.flush = function(type) {
-    io[type].flush();
+    enqueue(() => io[type].flush());
 };
 
 self.set_prompt = function(prompt) {
-    term.set_prompt(prompt);
+    enqueue(() => term.set_prompt(prompt));
 };
 
 const python = String.raw`
@@ -119,13 +141,20 @@ async function run(code, filename = '__internal__') {
 
 async function main(...args) {
     await term.pause();
-    run(`import sys; sys.argv=${JSON.stringify(args)}`)
-    run(python);
+    await run(`import sys; sys.argv=${JSON.stringify(args)}`);
+    await run(python);
     if (!args.length) {
         return new Promise(async resolve => {
             self.version();
-            term.push(command => {
-                return self.interpreter(command);
+            self.flush('stdout');
+            await drain();
+            await term.push(async command => {
+                self.interpreter(command);
+                // the REPL prints per command, so the buffers cannot wait for
+                // main() to return the way a script run does
+                self.flush('stdout');
+                self.flush('stderr');
+                await drain();
             }, {
                 name: 'python',
                 prompt: '>>> ',
@@ -134,7 +163,6 @@ async function main(...args) {
             await term.resume();
         });
     }
-    await term.pause();
     const options = await parse(args);
     try {
         if (options.c) {
@@ -145,14 +173,17 @@ async function main(...args) {
             const code = await fs.readFile(filename, 'utf8');
             return await run(code.replace(/^#!.*/, ''), filename);
         }
-        stderr.writeln('usage: python [-c "code"] | [filename]');
+        await stderr.writeln('usage: python [-c "code"] | [filename]');
         return 0;
     } catch(e) {
-        stderr.writeln(e.message);
+        await stderr.writeln(e.message);
         return 1;
     } finally {
+        // the queue holds everything Python printed; it has to reach the
+        // buffers before they are flushed
+        await drain();
         await io.stdout.flush();
         await io.stderr.flush();
-        term.resume();
+        await term.resume();
     }
 }
